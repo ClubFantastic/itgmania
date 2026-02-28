@@ -31,6 +31,8 @@ enum GameButton {
   GAME_BUTTON_OPERATOR, /**< Access the operator menu. */
   GAME_BUTTON_EFFECT_UP,
   GAME_BUTTON_EFFECT_DOWN,
+  GAME_BUTTON_SPEED_UP,   /**< Hold to run the game at 4x speed. */
+  GAME_BUTTON_SPEED_DOWN, /**< Hold to run the game at 1/4 speed. */
   GAME_BUTTON_CUSTOM_01,
   GAME_BUTTON_CUSTOM_02,
   GAME_BUTTON_CUSTOM_03,

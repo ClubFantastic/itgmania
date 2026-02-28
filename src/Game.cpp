@@ -35,6 +35,8 @@ static const Game::PerButtonInfo g_CommonButtonInfo[] = {
     {GameButtonType_Menu},  // GAME_BUTTON_OPERATOR
     {GameButtonType_Menu},  // GAME_BUTTON_EFFECT_UP
     {GameButtonType_Menu},  // GAME_BUTTON_EFFECT_DOWN
+    {GameButtonType_Menu},  // GAME_BUTTON_SPEED_UP
+    {GameButtonType_Menu},  // GAME_BUTTON_SPEED_DOWN
 };
 
 const Game::PerButtonInfo* Game::GetPerButtonInfo(GameButton gb) const {

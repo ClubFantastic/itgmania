@@ -154,8 +154,6 @@ const int MAX_DEBUG_LINES = 30;
 struct MapDebugToDI {
   DeviceInput holdForDebug1;
   DeviceInput holdForDebug2;
-  DeviceInput holdForSlow;
-  DeviceInput holdForFast;
   DeviceInput toggleMute;
   DeviceInput debugButton[MAX_DEBUG_LINES];
   DeviceInput gameplayButton[MAX_DEBUG_LINES];
@@ -163,8 +161,6 @@ struct MapDebugToDI {
   void Clear() {
     holdForDebug1.MakeInvalid();
     holdForDebug2.MakeInvalid();
-    holdForSlow.MakeInvalid();
-    holdForFast.MakeInvalid();
     toggleMute.MakeInvalid();
     for (int i = 0; i < MAX_DEBUG_LINES; i++) {
       debugButton[i].MakeInvalid();
@@ -218,8 +214,6 @@ void ScreenDebugOverlay::Init() {
 
     g_Mappings.holdForDebug1 = DeviceInput(DEVICE_KEYBOARD, KEY_F3);
     g_Mappings.holdForDebug2.MakeInvalid();
-    g_Mappings.holdForSlow = DeviceInput(DEVICE_KEYBOARD, KEY_ACCENT);
-    g_Mappings.holdForFast = DeviceInput(DEVICE_KEYBOARD, KEY_TAB);
     g_Mappings.toggleMute = DeviceInput(DEVICE_KEYBOARD, KEY_PAUSE);
 
     /* TODO: Find a better way of indicating which option is which here.
@@ -352,13 +346,17 @@ void ScreenDebugOverlay::Update(float fDeltaTime) {
 
   {
     float fRate = 1;
-    if (INPUTFILTER->IsBeingPressed(g_Mappings.holdForFast)) {
-      if (INPUTFILTER->IsBeingPressed(g_Mappings.holdForSlow)) {
+    bool bFast = INPUTMAPPER->IsBeingPressed(
+        GameInput(GameController_1, GAME_BUTTON_SPEED_UP));
+    bool bSlow = INPUTMAPPER->IsBeingPressed(
+        GameInput(GameController_1, GAME_BUTTON_SPEED_DOWN));
+    if (bFast) {
+      if (bSlow) {
         fRate = 0;  // both; stop time
       } else {
         fRate *= 4;
       }
-    } else if (INPUTFILTER->IsBeingPressed(g_Mappings.holdForSlow)) {
+    } else if (bSlow) {
       fRate /= 4;
     }
 
