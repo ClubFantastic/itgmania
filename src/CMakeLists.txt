@@ -457,6 +457,10 @@ if(HAS_SDL3)
   target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_SDL3)
 endif()
 
+if(HAS_GL3)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_GL3 SUPPORT_GL3)
+endif()
+
 list(APPEND SM_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
             "${SM_GENERATED_SRC_DIR}")
 

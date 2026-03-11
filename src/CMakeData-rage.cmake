@@ -119,6 +119,16 @@ elseif(LINUX)
   endif()
 endif()
 
+if(WITH_GL3)
+  list(APPEND SMDATA_RAGE_GRAPHICS_SRC
+    "RageDisplay_GL3.cpp"
+    "RageDisplay_GL3_Shaders.cpp")
+  list(APPEND SMDATA_RAGE_GRAPHICS_HPP
+    "RageDisplay_GL3.h"
+    "RageDisplay_GL3_Helpers.h"
+    "RageDisplay_GL3_Shaders.h")
+endif()
+
 source_group("Rage\\\\Graphics"
              FILES
              ${SMDATA_RAGE_GRAPHICS_SRC}

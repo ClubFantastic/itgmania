@@ -3,7 +3,11 @@
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
+#if defined(HAS_GL3)
+#include "imgui_impl_opengl3.h"
+#else
 #include "imgui_impl_opengl2.h"
+#endif
 
 #include "RageLog.h"
 #include "RageFile.h"
@@ -90,10 +94,15 @@ namespace ImGuiManager
 		LoadThemeFonts();
 
 		ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+#if defined(HAS_GL3)
+		ImGui_ImplOpenGL3_Init("#version 330 core");
+		LOG->Info("ImGuiManager: initialized (OpenGL 3.3 backend)");
+#else
 		ImGui_ImplOpenGL2_Init();
+		LOG->Info("ImGuiManager: initialized (OpenGL 2 backend)");
+#endif
 
 		s_bInitialized = true;
-		LOG->Info("ImGuiManager: initialized");
 	}
 
 	void Shutdown()
@@ -101,7 +110,11 @@ namespace ImGuiManager
 		if (!s_bInitialized)
 			return;
 
+#if defined(HAS_GL3)
+		ImGui_ImplOpenGL3_Shutdown();
+#else
 		ImGui_ImplOpenGL2_Shutdown();
+#endif
 		ImGui_ImplSDL3_Shutdown();
 		ImGui::DestroyContext();
 
@@ -121,7 +134,11 @@ namespace ImGuiManager
 		if (!s_bInitialized)
 			return;
 
+#if defined(HAS_GL3)
+		ImGui_ImplOpenGL3_NewFrame();
+#else
 		ImGui_ImplOpenGL2_NewFrame();
+#endif
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
@@ -135,7 +152,11 @@ namespace ImGuiManager
 			return;
 
 		ImGui::Render();
+#if defined(HAS_GL3)
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#else
 		ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+#endif
 	}
 
 	bool WantsKeyboard()
