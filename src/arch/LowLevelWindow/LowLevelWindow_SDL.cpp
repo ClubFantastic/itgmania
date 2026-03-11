@@ -213,8 +213,8 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 	SDL_GetWindowSizeInPixels(m_pWindow, &pixW, &pixH);
 	float scale = SDL_GetWindowDisplayScale(m_pWindow);
 
-	LOG->Info("SDL TryVideoMode: requested %dx%d, logical %dx%d, pixels %dx%d, scale %.2f, windowed=%d, borderless=%d",
-		p.width, p.height, logW, logH, pixW, pixH, scale, p.windowed, p.bWindowIsFullscreenBorderless);
+	LOG->Info("SDL TryVideoMode: logical %dx%d, pixels %dx%d, scale %.2f",
+		logW, logH, pixW, pixH, scale);
 
 	// Use the actual pixel dimensions for the GL viewport.
 	m_CurrentParams.windowWidth = pixW;
