@@ -96,23 +96,44 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 
 		SDL_PropertiesID props = SDL_CreateProperties();
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, p.sWindowTitle.c_str());
-		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, p.width);
-		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, p.height);
 		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
 		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false);
-		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, false);
+		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
 
-		// Position on the target display
-		SDL_DisplayID targetDisplay = FindSDLDisplay(p.sDisplayId);
-		if (targetDisplay)
+		if (p.bWindowIsFullscreenBorderless)
 		{
-			SDL_Rect bounds;
-			if (SDL_GetDisplayBounds(targetDisplay, &bounds))
+			// For borderless fullscreen, create at a small default size and
+			// set fullscreen immediately — SDL/compositor will resize to fill
+			// the display. Creating at the native res would be interpreted as
+			// logical coords which may be huge on scaled displays.
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, 640);
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, 480);
+			SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
+		}
+		else if (!p.windowed)
+		{
+			// Exclusive fullscreen — also start fullscreen
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, p.width);
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, p.height);
+			SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
+		}
+		else
+		{
+			// Windowed mode — position on the target display
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, p.width);
+			SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, p.height);
+
+			SDL_DisplayID targetDisplay = FindSDLDisplay(p.sDisplayId);
+			if (targetDisplay)
 			{
-				SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER,
-					bounds.x + (bounds.w - p.width) / 2);
-				SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER,
-					bounds.y + (bounds.h - p.height) / 2);
+				SDL_Rect bounds;
+				if (SDL_GetDisplayBounds(targetDisplay, &bounds))
+				{
+					SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER,
+						bounds.x + (bounds.w - p.width) / 2);
+					SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER,
+						bounds.y + (bounds.h - p.height) / 2);
+				}
 			}
 		}
 
@@ -149,28 +170,29 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 		SDL_SetWindowSize(m_pWindow, p.width, p.height);
 	}
 
-	// Handle fullscreen mode
-	if (!p.windowed)
+	// Handle fullscreen mode.
+	// In ITGmania, "fullscreen borderless" uses windowed=true with
+	// bWindowIsFullscreenBorderless=true. SDL3 handles this as desktop
+	// fullscreen (NULL mode = use desktop resolution, no mode switch).
+	if (p.bWindowIsFullscreenBorderless)
 	{
-		if (p.bWindowIsFullscreenBorderless)
-		{
-			// Desktop fullscreen (borderless) — pass NULL mode
-			SDL_SetWindowFullscreenMode(m_pWindow, nullptr);
-		}
-		else
-		{
-			// Exclusive fullscreen — find closest matching mode
-			SDL_DisplayID targetDisplay = FindSDLDisplay(p.sDisplayId);
-			SDL_DisplayMode closest;
-			bool found = SDL_GetClosestFullscreenDisplayMode(
-				targetDisplay, p.width, p.height,
-				p.rate > 0 ? (float)p.rate : 0.0f, false, &closest);
+		SDL_SetWindowFullscreenMode(m_pWindow, nullptr);
+		SDL_SetWindowFullscreen(m_pWindow, true);
+	}
+	else if (!p.windowed)
+	{
+		// Exclusive fullscreen — find closest matching display mode
+		SDL_DisplayID targetDisplay = FindSDLDisplay(p.sDisplayId);
+		SDL_DisplayMode closest;
+		bool found = SDL_GetClosestFullscreenDisplayMode(
+			targetDisplay, p.width, p.height,
+			p.rate > 0 ? (float)p.rate : 0.0f, false, &closest);
 
-			if (found)
-				SDL_SetWindowFullscreenMode(m_pWindow, &closest);
-			else
-				SDL_SetWindowFullscreenMode(m_pWindow, nullptr); // fallback to desktop
-		}
+		if (found)
+			SDL_SetWindowFullscreenMode(m_pWindow, &closest);
+		else
+			SDL_SetWindowFullscreenMode(m_pWindow, nullptr);
+
 		SDL_SetWindowFullscreen(m_pWindow, true);
 	}
 	else
@@ -184,14 +206,17 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 	// Screensaver
 	SDL_DisableScreenSaver();
 
-	// Update current params.
-	// Use pixel dimensions (not logical/screen coordinates) since these feed
-	// directly into glViewport. On HiDPI/scaled displays, SDL_GetWindowSize
-	// returns logical coords (e.g. 1536x864 at 2.5x scale) while
-	// SDL_GetWindowSizeInPixels returns the actual framebuffer size (3840x2160).
+	// Gather all the size information SDL gives us.
 	m_CurrentParams = ActualVideoModeParams(p);
-	int pixW, pixH;
+	int logW, logH, pixW, pixH;
+	SDL_GetWindowSize(m_pWindow, &logW, &logH);
 	SDL_GetWindowSizeInPixels(m_pWindow, &pixW, &pixH);
+	float scale = SDL_GetWindowDisplayScale(m_pWindow);
+
+	LOG->Info("SDL TryVideoMode: requested %dx%d, logical %dx%d, pixels %dx%d, scale %.2f, windowed=%d, borderless=%d",
+		p.width, p.height, logW, logH, pixW, pixH, scale, p.windowed, p.bWindowIsFullscreenBorderless);
+
+	// Use the actual pixel dimensions for the GL viewport.
 	m_CurrentParams.windowWidth = pixW;
 	m_CurrentParams.windowHeight = pixH;
 

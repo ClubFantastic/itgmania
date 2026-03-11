@@ -149,9 +149,16 @@ void InputHandler_SDL::Update()
 			break;
 
 		case SDL_EVENT_MOUSE_MOTION:
+		{
+			// SDL3 gives mouse coords in logical (screen) coordinates.
+			// Scale to pixel coordinates to match what the game expects.
+			float scale = SDL_GetWindowDisplayScale(
+				SDL_GetWindowFromEvent(&event));
+			if (scale <= 0) scale = 1.0f;
 			INPUTFILTER->UpdateCursorLocation(
-				(int)event.motion.x, (int)event.motion.y);
+				event.motion.x * scale, event.motion.y * scale);
 			break;
+		}
 
 		case SDL_EVENT_MOUSE_WHEEL:
 			if (event.wheel.y > 0)
