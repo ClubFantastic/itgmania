@@ -6,10 +6,77 @@
 #include "imgui_impl_opengl2.h"
 
 #include "RageLog.h"
+#include "RageFile.h"
+#include "RageFileManager.h"
+#include "RageUtil.h"
+#include "ThemeManager.h"
 
 namespace ImGuiManager
 {
 	static bool s_bInitialized = false;
+
+	static void LoadThemeFonts()
+	{
+		if (!THEME || !THEME->IsThemeLoaded())
+		{
+			LOG->Info("ImGuiManager: no theme loaded, using default font");
+			return;
+		}
+
+		RString sFontDir = THEME->GetCurThemeDir() + "TrueTypeFonts/";
+
+		std::vector<RString> vsFonts;
+		std::vector<RString> exts = { "ttf", "otf" };
+		FILEMAN->GetDirListingWithMultipleExtensions(sFontDir, exts, vsFonts, false, true);
+
+		if (vsFonts.empty())
+		{
+			LOG->Info("ImGuiManager: no fonts in %s, using default", sFontDir.c_str());
+			return;
+		}
+
+		ImGuiIO& io = ImGui::GetIO();
+
+		for (const RString& sPath : vsFonts)
+		{
+			RageFile f;
+			if (!f.Open(sPath))
+			{
+				LOG->Warn("ImGuiManager: failed to open %s: %s", sPath.c_str(), f.GetError().c_str());
+				continue;
+			}
+
+			int iSize = f.GetFileSize();
+			if (iSize <= 0)
+			{
+				LOG->Warn("ImGuiManager: empty font file %s", sPath.c_str());
+				continue;
+			}
+
+			// ImGui takes ownership of this allocation (must be allocated with IM_ALLOC)
+			void* pData = IM_ALLOC(iSize);
+			if (f.Read(pData, iSize) != iSize)
+			{
+				LOG->Warn("ImGuiManager: failed to read %s", sPath.c_str());
+				IM_FREE(pData);
+				continue;
+			}
+
+			ImFontConfig config;
+			config.FontDataOwnedByAtlas = true;
+
+			// Extract just the filename for the font name
+			size_t iSlash = sPath.find_last_of('/');
+			RString sName = (iSlash != RString::npos) ? RString(sPath.substr(iSlash + 1)) : sPath;
+			snprintf(config.Name, sizeof(config.Name), "%s", sName.c_str());
+
+			ImFont* pFont = io.Fonts->AddFontFromMemoryTTF(pData, iSize, 16.0f, &config);
+			if (pFont)
+				LOG->Info("ImGuiManager: loaded font '%s'", sName.c_str());
+			else
+				LOG->Warn("ImGuiManager: failed to add font '%s'", sName.c_str());
+		}
+	}
 
 	void Initialize(SDL_Window* window, SDL_GLContext gl_context)
 	{
@@ -19,6 +86,8 @@ namespace ImGuiManager
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGui::StyleColorsDark();
+
+		LoadThemeFonts();
 
 		ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
 		ImGui_ImplOpenGL2_Init();
