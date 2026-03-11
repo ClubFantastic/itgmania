@@ -750,7 +750,14 @@ void RageDisplay_GL3::EndFrame()
 	FrameLimitBeforeVsync( g_pWind->GetActualVideoModeParams().rate );
 	g_pWind->SwapBuffers();
 	FrameLimitAfterVsync();
-	glFinish();
+
+	// When vsync is on, SwapBuffers already blocks until the next display
+	// refresh, so glFinish() is redundant and just adds a full pipeline stall.
+	// When vsync is off, glFinish() prevents the driver from queuing multiple
+	// frames, keeping the engine state close to what's on screen.
+	if (!g_pWind->GetActualVideoModeParams().vsync)
+		glFinish();
+
 	g_pWind->Update();
 
 	FrameMark;
