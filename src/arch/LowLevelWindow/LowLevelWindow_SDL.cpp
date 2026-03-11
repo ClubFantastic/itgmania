@@ -100,12 +100,6 @@ std::string LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNe
 		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 		// Enable context sharing for threaded rendering
 		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-#if defined(HAS_GL3)
-		// Request GL 3.3 core profile for the GL3 renderer
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-#endif
 
 		SDL_PropertiesID props = SDL_CreateProperties();
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, p.sWindowTitle.c_str());

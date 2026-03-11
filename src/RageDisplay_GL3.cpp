@@ -714,6 +714,11 @@ bool RageDisplay_GL3::BeginFrame()
 	SetZWrite( true );
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+	// Restore GL state that may have been changed by ImGui or other subsystems
+	glUseProgram( m_CurrentProgram );
+	glBindVertexArray( m_VAO );
+	glDisable( GL_SCISSOR_TEST );
+
 	return RageDisplay::BeginFrame();
 }
 
@@ -872,6 +877,7 @@ void RageDisplay_GL3::EnsureQuadIBO( int iNumQuads )
 
 void RageDisplay_GL3::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -885,6 +891,7 @@ void RageDisplay_GL3::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVer
 
 void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -894,6 +901,7 @@ void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNu
 
 void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -903,6 +911,7 @@ void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts
 
 void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -912,6 +921,7 @@ void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVer
 
 void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -921,8 +931,26 @@ void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNu
 
 void RageDisplay_GL3::DrawCompiledGeometryInternal( const RageCompiledGeometry *p, int iMeshIndex )
 {
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
+
+	// Models don't have per-vertex colors (attrib 2 is disabled in their VAO).
+	// When lighting is off, the legacy renderer applies the material color via
+	// glColor4fv(diffuse+emissive+ambient) as a fallback vertex color.
+	// Replicate that here by setting the current vertex attrib value.
+	if (!m_bLightingEnabled)
+	{
+		RageColor c = m_MatDiffuse;
+		c.r += m_MatEmissive.r + m_MatAmbient.r;
+		c.g += m_MatEmissive.g + m_MatAmbient.g;
+		c.b += m_MatEmissive.b + m_MatAmbient.b;
+		c.r = std::min( c.r, 1.0f );
+		c.g = std::min( c.g, 1.0f );
+		c.b = std::min( c.b, 1.0f );
+		// The shader swizzles a_Color.zyxw (BGRA→RGBA), so pass in BGRA order
+		glVertexAttrib4f( 2, c.b, c.g, c.r, c.a );
+	}
 
 	p->Draw( iMeshIndex );
 }
@@ -935,6 +963,7 @@ void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNu
 		return;
 	}
 
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
@@ -981,6 +1010,7 @@ void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[]
 		vIndices[i*12+11] = i*3+5;
 	}
 
+	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
