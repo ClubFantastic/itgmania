@@ -7,4 +7,5 @@ Terminal=false
 Icon=/opt/itgmania/Data/logo.svg
 Type=Application
 Categories=Game;ArcadeGame
+StartupWMClass=itgmania
 Comment=A cross-platform rhythm video game.

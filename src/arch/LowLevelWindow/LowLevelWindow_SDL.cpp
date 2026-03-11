@@ -4,6 +4,8 @@
 #include "RageException.h"
 #include "DisplaySpec.h"
 #include "RageDisplay_OGL_Helpers.h"
+#include "RageSurface.h"
+#include "RageSurface_Load.h"
 #include "arch/ArchHooks/ArchHooks.h"
 
 #include <GL/glew.h>
@@ -18,6 +20,10 @@ LowLevelWindow_SDL::LowLevelWindow_SDL()
 	  m_GLContext(nullptr),
 	  m_GLBackgroundContext(nullptr)
 {
+	// Set app metadata before SDL_Init so the Wayland compositor can match
+	// the window to the .desktop entry for the correct icon and taskbar entry.
+	SDL_SetAppMetadata("ITGmania", nullptr, "itgmania");
+
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
 		RageException::Throw("SDL_Init(SDL_INIT_VIDEO) failed: %s", SDL_GetError());
@@ -159,10 +165,32 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 			SDL_GL_MakeCurrent(m_pWindow, m_GLContext);
 		}
 
-		// Initialize GLEW
+		// Ensure context is current before GLEW init
+		if (!SDL_GL_MakeCurrent(m_pWindow, m_GLContext))
+			LOG->Warn("SDL_GL_MakeCurrent before glewInit: %s", SDL_GetError());
+
+		// Initialize GLEW. glewExperimental is needed because glewInit()
+		// calls glGetString(GL_EXTENSIONS) which returns NULL on core
+		// profile contexts (GL 3.2+), causing a spurious error.
+		glewExperimental = GL_TRUE;
 		GLenum err = glewInit();
 		if (GLEW_OK != err)
-			return ssprintf("glewInit failed: %s", glewGetErrorString(err));
+		{
+			// GLEW may fail on EGL/Wayland contexts (error 4 =
+			// GLEW_ERROR_GLX_VERSION_11_ONLY) because it probes GLX
+			// which doesn't exist. If GL functions work, continue.
+			if (glGetString(GL_VERSION) != nullptr)
+			{
+				LOG->Info("glewInit returned error %d (%s) but GL context is functional; continuing",
+					(int)err, glewGetErrorString(err));
+			}
+			else
+			{
+				return ssprintf("glewInit failed: %s", glewGetErrorString(err));
+			}
+		}
+		// glewInit may set GL_INVALID_ENUM with glewExperimental; clear it.
+		glGetError();
 	}
 	else
 	{
@@ -198,6 +226,29 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 	else
 	{
 		SDL_SetWindowFullscreen(m_pWindow, false);
+	}
+
+	// Window icon
+	if (!p.sIconFile.empty())
+	{
+		RString sError;
+		RageSurface *pIcon = RageSurfaceUtils::LoadFile(p.sIconFile, sError);
+		if (pIcon)
+		{
+			SDL_Surface *pSDLIcon = SDL_CreateSurfaceFrom(
+				pIcon->w, pIcon->h,
+				SDL_GetPixelFormatForMasks(
+					pIcon->fmt.BitsPerPixel,
+					pIcon->fmt.Rmask, pIcon->fmt.Gmask,
+					pIcon->fmt.Bmask, pIcon->fmt.Amask),
+				pIcon->pixels, pIcon->pitch);
+			if (pSDLIcon)
+			{
+				SDL_SetWindowIcon(m_pWindow, pSDLIcon);
+				SDL_DestroySurface(pSDLIcon);
+			}
+			delete pIcon;
+		}
 	}
 
 	// VSync
