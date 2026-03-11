@@ -1,5 +1,10 @@
 #include "RageDisplay_OGL.h"
 
+#if defined(HAS_SDL3)
+#include "arch/LowLevelWindow/LowLevelWindow_SDL.h"
+#include "ImGuiManager.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -590,14 +595,21 @@ std::string RageDisplay_Legacy::Init(
   glGetFloatv(GL_LINE_WIDTH_RANGE, g_line_range);
   glGetFloatv(GL_POINT_SIZE_RANGE, g_point_range);
 
+#if defined(HAS_SDL3)
+  {
+    auto* sdlWind = static_cast<LowLevelWindow_SDL*>(g_pWind);
+    ImGuiManager::Initialize(sdlWind->GetWindow(), sdlWind->GetGLContext());
+  }
+#endif
+
   return std::string();
 }
 
-RageDisplay_Legacy::~RageDisplay_Legacy() { delete g_pWind; }
-
-void RageDisplay_Legacy::GetDisplaySpecs(DisplaySpecs& out) const {
-  out.clear();
-  g_pWind->GetDisplaySpecs(out);
+RageDisplay_Legacy::~RageDisplay_Legacy() {
+#if defined(HAS_SDL3)
+  ImGuiManager::Shutdown();
+#endif
+  delete g_pWind;
 }
 
 static void CheckPalettedTextures() {

@@ -3,6 +3,7 @@
 #include "RageLog.h"
 #include "RageDisplay.h"
 #include "InputFilter.h"
+#include "ImGuiManager.h"
 #include "arch/LowLevelWindow/LowLevelWindow_SDL.h"
 
 #include <SDL3/SDL.h>
@@ -129,6 +130,17 @@ void InputHandler_SDL::Update()
 	SDL_Event event;
 	while (LowLevelWindow_SDL::PopInputEvent(event))
 	{
+		// Let ImGui consume input when it wants focus
+		bool isKey = (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP);
+		bool isMouse = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+				event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+				event.type == SDL_EVENT_MOUSE_MOTION ||
+				event.type == SDL_EVENT_MOUSE_WHEEL);
+		if (isKey && ImGuiManager::WantsKeyboard())
+			continue;
+		if (isMouse && ImGuiManager::WantsMouse())
+			continue;
+
 		switch (event.type)
 		{
 		case SDL_EVENT_KEY_DOWN:

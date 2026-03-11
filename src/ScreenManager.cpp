@@ -61,6 +61,10 @@
 
 #include "ScreenManager.h"
 
+#if defined(HAS_SDL3)
+#include "ImGuiManager.h"
+#endif
+
 #include <algorithm>
 #include <map>
 #include <set>
@@ -510,6 +514,10 @@ void ScreenManager::Draw() {
     return;
   }
 
+#if defined(HAS_SDL3)
+  ImGuiManager::NewFrame();
+#endif
+
   DISPLAY->CameraPushMatrix();
   DISPLAY->LoadMenuPerspective(
       0, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_CENTER_X, SCREEN_CENTER_Y);
@@ -524,6 +532,10 @@ void ScreenManager::Draw() {
   for (Screen* overlayScreen : g_OverlayScreens) {
     overlayScreen->Draw();
   }
+
+#if defined(HAS_SDL3)
+  ImGuiManager::Render();
+#endif
 
   DISPLAY->EndFrame();
 }

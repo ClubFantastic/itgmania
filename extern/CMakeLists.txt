@@ -15,5 +15,9 @@ include(CMakeProject-png.cmake)
 include(CMakeProject-ixwebsocket.cmake)
 include(CMakeProject-miniz.cmake)
 
+if(HAS_SDL3)
+  include(CMakeProject-imgui.cmake)
+endif()
+
 # External projects
 include(CMakeProject-libusb.cmake)

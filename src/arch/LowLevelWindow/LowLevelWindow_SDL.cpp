@@ -7,6 +7,7 @@
 #include "RageSurface.h"
 #include "RageSurface_Load.h"
 #include "arch/ArchHooks/ArchHooks.h"
+#include "ImGuiManager.h"
 
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
@@ -353,6 +354,8 @@ void LowLevelWindow_SDL::Update()
 	SDL_Event event;
 	while (SDL_PollEvent(&event))
 	{
+		ImGuiManager::ProcessEvent(event);
+
 		switch (event.type)
 		{
 		case SDL_EVENT_QUIT:

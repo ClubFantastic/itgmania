@@ -42,6 +42,9 @@ public:
 	// InputHandler_SDL reads input events from this queue.
 	static bool PopInputEvent(SDL_Event &out);
 
+	SDL_Window* GetWindow() const { return m_pWindow; }
+	SDL_GLContext GetGLContext() const { return m_GLContext; }
+
 private:
 	SDL_Window *m_pWindow;
 	SDL_GLContext m_GLContext;

@@ -129,9 +129,11 @@ list(APPEND SMDATA_ARCH_LOWLEVEL_HPP "arch/LowLevelWindow/LowLevelWindow.h")
 
 if(HAS_SDL3)
   list(APPEND SMDATA_ARCH_LOWLEVEL_SRC
-              "arch/LowLevelWindow/LowLevelWindow_SDL.cpp")
+              "arch/LowLevelWindow/LowLevelWindow_SDL.cpp"
+              "ImGuiManager.cpp")
   list(APPEND SMDATA_ARCH_LOWLEVEL_HPP
-              "arch/LowLevelWindow/LowLevelWindow_SDL.h")
+              "arch/LowLevelWindow/LowLevelWindow_SDL.h"
+              "ImGuiManager.h")
 elseif(WIN32)
   list(APPEND SMDATA_ARCH_LOWLEVEL_SRC
               "arch/LowLevelWindow/LowLevelWindow_Win32.cpp")
