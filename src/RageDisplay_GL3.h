@@ -115,6 +115,7 @@ private:
 	void DestroyShaderPrograms();
 	void UploadVertices( const RageSpriteVertex v[], int iNumVerts );
 	void SetSpriteUniforms();
+	void InvalidateMatrixCache();
 
 	// Shader programs
 	GLuint m_SpriteProgram;
@@ -162,6 +163,10 @@ private:
 	int m_iQuadIBOSize;
 	void EnsureQuadIBO( int iNumQuads );
 
+	// Symmetric quad strip IBO (reused across calls)
+	GLuint m_SymQuadIBO;
+	int m_iSymQuadIBOSize;
+
 	// Current state (for uniforms)
 	TextureMode m_CurTextureMode;
 	bool m_bAlphaTestEnabled;
@@ -170,6 +175,25 @@ private:
 	bool m_bSphereMapping;
 	int m_iCelShadedStage;
 	bool m_bInvertY;
+
+	// Matrix cache — dirty flags to avoid redundant uniform uploads
+	bool m_bMatrixDirty;
+	// Cache the last uploaded matrices so we can detect changes
+	RageMatrix m_CachedProjection;
+	RageMatrix m_CachedModelView;
+	RageMatrix m_CachedTextureMatrix;
+	GLuint m_CachedMatrixProgram; // which program the cached matrices were uploaded to
+
+	// Uniform cache — dirty flag to avoid redundant uniform uploads
+	bool m_bUniformsDirty;
+	// Cached uniform values (last uploaded)
+	TextureMode m_CachedTextureMode;
+	bool m_bCachedAlphaTestEnabled;
+	bool m_bCachedTextureEnabled;
+	bool m_bCachedLightingEnabled;
+	GLuint m_CachedUniformProgram;
+	// Cached lighting uniforms
+	bool m_bLightUniformsDirty;
 
 	// Material state
 	RageColor m_MatEmissive, m_MatAmbient, m_MatDiffuse, m_MatSpecular;

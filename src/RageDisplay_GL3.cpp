@@ -459,6 +459,8 @@ RageDisplay_GL3::RageDisplay_GL3()
 	m_QuadIBO = 0;
 	m_iVBOSize = 0;
 	m_iQuadIBOSize = 0;
+	m_SymQuadIBO = 0;
+	m_iSymQuadIBOSize = 0;
 	m_CurTextureMode = TextureMode_Modulate;
 	m_bAlphaTestEnabled = false;
 	m_bLightingEnabled = false;
@@ -468,6 +470,15 @@ RageDisplay_GL3::RageDisplay_GL3()
 	m_bMaterialLightingFallback = false;
 	m_fMatShininess = 0;
 	m_pCurrentRenderTarget = nullptr;
+	m_bMatrixDirty = true;
+	m_CachedMatrixProgram = 0;
+	m_bUniformsDirty = true;
+	m_CachedTextureMode = TextureMode_Modulate;
+	m_bCachedAlphaTestEnabled = false;
+	m_bCachedTextureEnabled = false;
+	m_bCachedLightingEnabled = false;
+	m_CachedUniformProgram = 0;
+	m_bLightUniformsDirty = true;
 
 	for (int i = 0; i < NUM_TextureUnit; ++i)
 	{
@@ -487,6 +498,7 @@ RageDisplay_GL3::~RageDisplay_GL3()
 	if (m_VAO) glDeleteVertexArrays( 1, &m_VAO );
 	if (m_VBO) glDeleteBuffers( 1, &m_VBO );
 	if (m_QuadIBO) glDeleteBuffers( 1, &m_QuadIBO );
+	if (m_SymQuadIBO) glDeleteBuffers( 1, &m_SymQuadIBO );
 
 	for (auto &pair : m_mapRenderTargets)
 		delete pair.second;
@@ -618,7 +630,7 @@ RString RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccelerate
 
 	glGenBuffers( 1, &m_VBO );
 	glBindBuffer( GL_ARRAY_BUFFER, m_VBO );
-	m_iVBOSize = 256;
+	m_iVBOSize = 4096; // Pre-allocate for ~1024 quads to avoid runtime reallocation
 	glBufferData( GL_ARRAY_BUFFER, m_iVBOSize * sizeof(RageSpriteVertex), nullptr, GL_STREAM_DRAW );
 
 	// Set up vertex attribute layout matching RageSpriteVertex
@@ -644,7 +656,11 @@ RString RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccelerate
 	// Create quad index buffer (will grow as needed)
 	glGenBuffers( 1, &m_QuadIBO );
 	m_iQuadIBOSize = 0;
-	EnsureQuadIBO( 64 ); // pre-allocate for 64 quads
+	EnsureQuadIBO( 1024 ); // pre-allocate for 1024 quads
+
+	// Create symmetric quad strip IBO (reused across calls)
+	glGenBuffers( 1, &m_SymQuadIBO );
+	m_iSymQuadIBOSize = 0;
 
 	glBindVertexArray( 0 );
 
@@ -719,6 +735,9 @@ bool RageDisplay_GL3::BeginFrame()
 	glBindVertexArray( m_VAO );
 	glDisable( GL_SCISSOR_TEST );
 
+	// Invalidate caches — ImGui or other subsystems may have changed GL state
+	InvalidateMatrixCache();
+
 	return RageDisplay::BeginFrame();
 }
 
@@ -737,6 +756,15 @@ void RageDisplay_GL3::EndFrame()
 // Matrix upload
 // ============================================================
 
+void RageDisplay_GL3::InvalidateMatrixCache()
+{
+	m_bMatrixDirty = true;
+	m_bUniformsDirty = true;
+	m_bLightUniformsDirty = true;
+	m_CachedMatrixProgram = 0;
+	m_CachedUniformProgram = 0;
+}
+
 void RageDisplay_GL3::SendCurrentMatrices()
 {
 	RageMatrix projection;
@@ -754,47 +782,91 @@ void RageDisplay_GL3::SendCurrentMatrices()
 
 	const RageMatrix *texMatrix = GetTextureTop();
 
+	// Check if anything actually changed since last upload
+	bool bProgramChanged = (m_CurrentProgram != m_CachedMatrixProgram);
+	bool bProjectionChanged = bProgramChanged || memcmp( &projection, &m_CachedProjection, sizeof(RageMatrix) ) != 0;
+	bool bModelViewChanged = bProgramChanged || memcmp( &modelView, &m_CachedModelView, sizeof(RageMatrix) ) != 0;
+	bool bTexMatChanged = bProgramChanged || memcmp( texMatrix, &m_CachedTextureMatrix, sizeof(RageMatrix) ) != 0;
+
+	if (!bProjectionChanged && !bModelViewChanged && !bTexMatChanged)
+		return;
+
 	if (m_CurrentProgram == m_SpriteProgram)
 	{
-		glUniformMatrix4fv( m_uProjection, 1, GL_FALSE, (const float*)&projection );
-		glUniformMatrix4fv( m_uModelView, 1, GL_FALSE, (const float*)&modelView );
-		glUniformMatrix4fv( m_uTextureMatrix, 1, GL_FALSE, (const float*)texMatrix );
+		if (bProjectionChanged)
+			glUniformMatrix4fv( m_uProjection, 1, GL_FALSE, (const float*)&projection );
+		if (bModelViewChanged)
+			glUniformMatrix4fv( m_uModelView, 1, GL_FALSE, (const float*)&modelView );
+		if (bTexMatChanged)
+			glUniformMatrix4fv( m_uTextureMatrix, 1, GL_FALSE, (const float*)texMatrix );
 	}
 	else if (m_CurrentProgram == m_LitSpriteProgram)
 	{
-		glUniformMatrix4fv( m_uLitProjection, 1, GL_FALSE, (const float*)&projection );
-		glUniformMatrix4fv( m_uLitModelView, 1, GL_FALSE, (const float*)&modelView );
-		glUniformMatrix4fv( m_uLitTextureMatrix, 1, GL_FALSE, (const float*)texMatrix );
+		if (bProjectionChanged)
+			glUniformMatrix4fv( m_uLitProjection, 1, GL_FALSE, (const float*)&projection );
+		if (bModelViewChanged)
+			glUniformMatrix4fv( m_uLitModelView, 1, GL_FALSE, (const float*)&modelView );
+		if (bTexMatChanged)
+			glUniformMatrix4fv( m_uLitTextureMatrix, 1, GL_FALSE, (const float*)texMatrix );
 	}
 	else
 	{
 		// Effect program — uses same uniform names as sprite
 		GLint loc;
-		loc = glGetUniformLocation( m_CurrentProgram, "u_Projection" );
-		if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)&projection );
-		loc = glGetUniformLocation( m_CurrentProgram, "u_ModelView" );
-		if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)&modelView );
-		loc = glGetUniformLocation( m_CurrentProgram, "u_TextureMatrix" );
-		if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)texMatrix );
+		if (bProjectionChanged)
+		{
+			loc = glGetUniformLocation( m_CurrentProgram, "u_Projection" );
+			if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)&projection );
+		}
+		if (bModelViewChanged)
+		{
+			loc = glGetUniformLocation( m_CurrentProgram, "u_ModelView" );
+			if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)&modelView );
+		}
+		if (bTexMatChanged)
+		{
+			loc = glGetUniformLocation( m_CurrentProgram, "u_TextureMatrix" );
+			if (loc >= 0) glUniformMatrix4fv( loc, 1, GL_FALSE, (const float*)texMatrix );
+		}
 	}
+
+	// Update cache
+	m_CachedProjection = projection;
+	m_CachedModelView = modelView;
+	m_CachedTextureMatrix = *texMatrix;
+	m_CachedMatrixProgram = m_CurrentProgram;
 }
 
 void RageDisplay_GL3::SetSpriteUniforms()
 {
+	bool bProgramChanged = (m_CurrentProgram != m_CachedUniformProgram);
+	bool bTexModeChanged = bProgramChanged || m_CurTextureMode != m_CachedTextureMode;
+	bool bAlphaTestChanged = bProgramChanged || m_bAlphaTestEnabled != m_bCachedAlphaTestEnabled;
+	bool bTexEnabledChanged = bProgramChanged || m_bTextureEnabled[0] != m_bCachedTextureEnabled;
+
 	if (m_CurrentProgram == m_SpriteProgram)
 	{
-		glUniform1i( m_uTextureMode, (int)m_CurTextureMode );
-		glUniform1i( m_uAlphaTestEnabled, m_bAlphaTestEnabled ? 1 : 0 );
-		glUniform1i( m_uTextureEnabled, m_bTextureEnabled[0] ? 1 : 0 );
+		if (bTexModeChanged)
+			glUniform1i( m_uTextureMode, (int)m_CurTextureMode );
+		if (bAlphaTestChanged)
+			glUniform1i( m_uAlphaTestEnabled, m_bAlphaTestEnabled ? 1 : 0 );
+		if (bTexEnabledChanged)
+			glUniform1i( m_uTextureEnabled, m_bTextureEnabled[0] ? 1 : 0 );
 	}
 	else if (m_CurrentProgram == m_LitSpriteProgram)
 	{
-		glUniform1i( m_uLitTextureMode, (int)m_CurTextureMode );
-		glUniform1i( m_uLitAlphaTestEnabled, m_bAlphaTestEnabled ? 1 : 0 );
-		glUniform1i( m_uLitTextureEnabled, m_bTextureEnabled[0] ? 1 : 0 );
-		glUniform1i( m_uLightEnabled, m_bLightingEnabled ? 1 : 0 );
+		bool bLightChanged = bProgramChanged || m_bLightingEnabled != m_bCachedLightingEnabled;
 
-		if (m_bLightingEnabled)
+		if (bTexModeChanged)
+			glUniform1i( m_uLitTextureMode, (int)m_CurTextureMode );
+		if (bAlphaTestChanged)
+			glUniform1i( m_uLitAlphaTestEnabled, m_bAlphaTestEnabled ? 1 : 0 );
+		if (bTexEnabledChanged)
+			glUniform1i( m_uLitTextureEnabled, m_bTextureEnabled[0] ? 1 : 0 );
+		if (bLightChanged)
+			glUniform1i( m_uLightEnabled, m_bLightingEnabled ? 1 : 0 );
+
+		if (m_bLightingEnabled && (m_bLightUniformsDirty || bProgramChanged))
 		{
 			// Use light 0 (primary directional light)
 			if (m_Lights[0].enabled)
@@ -816,17 +888,29 @@ void RageDisplay_GL3::SetSpriteUniforms()
 			glUniform4fv( m_uMatDiffuse, 1, (const float*)&m_MatDiffuse );
 			glUniform4fv( m_uMatSpecular, 1, (const float*)&m_MatSpecular );
 			glUniform1f( m_uMatShininess, m_fMatShininess );
+			m_bLightUniformsDirty = false;
 		}
+
+		m_bCachedLightingEnabled = m_bLightingEnabled;
 	}
 	else
 	{
-		// Effect program
-		GLint loc;
-		loc = glGetUniformLocation( m_CurrentProgram, "u_TextureEnabled" );
-		if (loc >= 0) glUniform1i( loc, m_bTextureEnabled[0] ? 1 : 0 );
-		loc = glGetUniformLocation( m_CurrentProgram, "u_Texture0" );
-		if (loc >= 0) glUniform1i( loc, 0 );
+		if (bProgramChanged)
+		{
+			// Effect program — only upload on program change
+			GLint loc;
+			loc = glGetUniformLocation( m_CurrentProgram, "u_TextureEnabled" );
+			if (loc >= 0) glUniform1i( loc, m_bTextureEnabled[0] ? 1 : 0 );
+			loc = glGetUniformLocation( m_CurrentProgram, "u_Texture0" );
+			if (loc >= 0) glUniform1i( loc, 0 );
+		}
 	}
+
+	// Update cache
+	m_CachedTextureMode = m_CurTextureMode;
+	m_bCachedAlphaTestEnabled = m_bAlphaTestEnabled;
+	m_bCachedTextureEnabled = m_bTextureEnabled[0];
+	m_CachedUniformProgram = m_CurrentProgram;
 }
 
 // ============================================================
@@ -990,24 +1074,32 @@ void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[]
 	int iNumTriangles = iNumPieces*4;
 	int iNumIndices = iNumTriangles*3;
 
-	static std::vector<uint16_t> vIndices;
-	unsigned uOldSize = vIndices.size();
-	unsigned uNewSize = std::max(uOldSize,(unsigned)iNumIndices);
-	vIndices.resize( uNewSize );
-	for( uint16_t i=(uint16_t)uOldSize/12; i<(uint16_t)iNumPieces; i++ )
+	// Grow the persistent IBO if needed
+	if (iNumPieces > m_iSymQuadIBOSize)
 	{
-		vIndices[i*12+0] = i*3+1;
-		vIndices[i*12+1] = i*3+3;
-		vIndices[i*12+2] = i*3+0;
-		vIndices[i*12+3] = i*3+1;
-		vIndices[i*12+4] = i*3+4;
-		vIndices[i*12+5] = i*3+3;
-		vIndices[i*12+6] = i*3+1;
-		vIndices[i*12+7] = i*3+5;
-		vIndices[i*12+8] = i*3+4;
-		vIndices[i*12+9] = i*3+1;
-		vIndices[i*12+10] = i*3+2;
-		vIndices[i*12+11] = i*3+5;
+		int iNewSize = std::max( iNumPieces, m_iSymQuadIBOSize * 2 );
+		iNewSize = std::max( iNewSize, 64 ); // minimum allocation
+
+		std::vector<uint16_t> vIndices( iNewSize * 12 );
+		for( uint16_t i = 0; i < (uint16_t)iNewSize; i++ )
+		{
+			vIndices[i*12+0] = i*3+1;
+			vIndices[i*12+1] = i*3+3;
+			vIndices[i*12+2] = i*3+0;
+			vIndices[i*12+3] = i*3+1;
+			vIndices[i*12+4] = i*3+4;
+			vIndices[i*12+5] = i*3+3;
+			vIndices[i*12+6] = i*3+1;
+			vIndices[i*12+7] = i*3+5;
+			vIndices[i*12+8] = i*3+4;
+			vIndices[i*12+9] = i*3+1;
+			vIndices[i*12+10] = i*3+2;
+			vIndices[i*12+11] = i*3+5;
+		}
+
+		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, m_SymQuadIBO );
+		glBufferData( GL_ELEMENT_ARRAY_BUFFER, vIndices.size() * sizeof(uint16_t), vIndices.data(), GL_STATIC_DRAW );
+		m_iSymQuadIBOSize = iNewSize;
 	}
 
 	glUseProgram( m_CurrentProgram );
@@ -1015,15 +1107,8 @@ void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[]
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
 
-	// Upload index data to a temporary buffer
-	GLuint ibo;
-	glGenBuffers( 1, &ibo );
-	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, ibo );
-	glBufferData( GL_ELEMENT_ARRAY_BUFFER, iNumIndices * sizeof(uint16_t), vIndices.data(), GL_STREAM_DRAW );
-
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, m_SymQuadIBO );
 	glDrawElements( GL_TRIANGLES, iNumIndices, GL_UNSIGNED_SHORT, nullptr );
-
-	glDeleteBuffers( 1, &ibo );
 }
 
 // ============================================================
@@ -1045,6 +1130,10 @@ int RageDisplay_GL3::GetNumTextureUnits()
 
 void RageDisplay_GL3::SetTexture( TextureUnit tu, uintptr_t iTexture )
 {
+	// Skip if the texture is already bound to this unit
+	if (m_iCurrentTextures[tu] == iTexture)
+		return;
+
 	glActiveTexture( GL_TEXTURE0 + tu );
 
 	if (iTexture)
@@ -1419,6 +1508,7 @@ void RageDisplay_GL3::SetMaterial(
 	m_MatDiffuse = diffuse;
 	m_MatSpecular = specular;
 	m_fMatShininess = shininess;
+	m_bLightUniformsDirty = true;
 }
 
 void RageDisplay_GL3::SetLighting( bool b )
@@ -1447,7 +1537,10 @@ void RageDisplay_GL3::SetLighting( bool b )
 void RageDisplay_GL3::SetLightOff( int index )
 {
 	if (index >= 0 && index < 8)
+	{
 		m_Lights[index].enabled = false;
+		m_bLightUniformsDirty = true;
+	}
 }
 
 void RageDisplay_GL3::SetLightDirectional(
@@ -1464,6 +1557,7 @@ void RageDisplay_GL3::SetLightDirectional(
 	m_Lights[index].diffuse = diffuse;
 	m_Lights[index].specular = specular;
 	m_Lights[index].dir = dir;
+	m_bLightUniformsDirty = true;
 }
 
 void RageDisplay_GL3::SetSphereEnvironmentMapping( TextureUnit tu, bool b )
@@ -1562,6 +1656,8 @@ uintptr_t RageDisplay_GL3::GetRenderTarget()
 
 void RageDisplay_GL3::SetRenderTarget( uintptr_t iTexture, bool bPreserveTexture )
 {
+	InvalidateMatrixCache(); // Projection/viewport changes
+
 	if (iTexture == 0)
 	{
 		m_bInvertY = false;
