@@ -184,18 +184,22 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 	// Screensaver
 	SDL_DisableScreenSaver();
 
-	// Update current params
+	// Update current params.
+	// Use pixel dimensions (not logical/screen coordinates) since these feed
+	// directly into glViewport. On HiDPI/scaled displays, SDL_GetWindowSize
+	// returns logical coords (e.g. 1536x864 at 2.5x scale) while
+	// SDL_GetWindowSizeInPixels returns the actual framebuffer size (3840x2160).
 	m_CurrentParams = ActualVideoModeParams(p);
-	int winW, winH;
-	SDL_GetWindowSize(m_pWindow, &winW, &winH);
-	m_CurrentParams.windowWidth = winW;
-	m_CurrentParams.windowHeight = winH;
+	int pixW, pixH;
+	SDL_GetWindowSizeInPixels(m_pWindow, &pixW, &pixH);
+	m_CurrentParams.windowWidth = pixW;
+	m_CurrentParams.windowHeight = pixH;
 
-	// For fullscreen borderless, the render size may differ from the window size
+	// For fullscreen borderless, the render size should match the pixel size
 	if (p.bWindowIsFullscreenBorderless)
 	{
-		m_CurrentParams.width = p.width;
-		m_CurrentParams.height = p.height;
+		m_CurrentParams.width = pixW;
+		m_CurrentParams.height = pixH;
 	}
 
 	return RString(); // success
@@ -293,12 +297,10 @@ void LowLevelWindow_SDL::Update()
 			break;
 		}
 
-		case SDL_EVENT_WINDOW_RESIZED:
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
 		{
-			int w = event.window.data1;
-			int h = event.window.data2;
-			m_CurrentParams.windowWidth = w;
-			m_CurrentParams.windowHeight = h;
+			m_CurrentParams.windowWidth = event.window.data1;
+			m_CurrentParams.windowHeight = event.window.data2;
 			break;
 		}
 
