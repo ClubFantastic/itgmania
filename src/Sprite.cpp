@@ -1,4 +1,5 @@
 #include "Sprite.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cassert>
@@ -530,6 +531,7 @@ void TexCoordArrayFromRect(float fImageCoords[8], const RectF& rect) {
 }
 
 void Sprite::DrawTexture(const TweenState* state) {
+  ZoneScopedN("Sprite::DrawTexture");
   Actor::SetGlobalRenderStates();  // set Actor-specified render states
 
   RectF crop = state->crop;

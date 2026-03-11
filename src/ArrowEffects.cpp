@@ -1,4 +1,5 @@
 #include "ArrowEffects.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -540,6 +541,7 @@ static float GetDisplayedBeat(const PlayerState* pPlayerState, float beat) {
 float ArrowEffects::GetYOffset(
     const PlayerState* pPlayerState, int iCol, float fNoteBeat,
     float& fPeakYOffsetOut, bool& bIsPastPeakOut, bool bAbsolute) {
+  ZoneScopedN("ArrowEffects::GetYOffset");
   // Default values that are returned if boomerang is off.
   fPeakYOffsetOut = FLT_MAX;
   bIsPastPeakOut = true;
@@ -806,6 +808,7 @@ float ArrowEffects::GetYOffsetFromYPos(
 
 float ArrowEffects::GetXPos(
     const PlayerState* pPlayerState, int iColNum, float fYOffset) {
+  ZoneScopedN("ArrowEffects::GetXPos");
   float fPixelOffsetFromCenter = 0;  // fill this in below
 
   const Style* pStyle =

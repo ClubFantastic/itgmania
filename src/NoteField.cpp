@@ -1,4 +1,5 @@
 #include "NoteField.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -371,6 +372,7 @@ void NoteField::InitColumnRenderers() {
 }
 
 void NoteField::Update(float fDeltaTime) {
+  ZoneScopedN("NoteField::Update");
   if (m_bFirstUpdate) {
     m_pCurDisplay->m_ReceptorArrowRow.PlayCommand("On");
   }
@@ -837,6 +839,7 @@ void NoteField::CalcPixelsBeforeAndAfterTargets() {
 }
 
 void NoteField::DrawPrimitives() {
+  ZoneScopedN("NoteField::DrawPrimitives");
   // LOG->Trace( "NoteField::DrawPrimitives()" );
 
   // This should be filled in on the first update.

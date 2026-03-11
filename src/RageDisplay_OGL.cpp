@@ -89,6 +89,23 @@ static LowLevelWindow* g_pWind;
 
 static bool g_bInvertY = false;
 
+// State cache to avoid redundant GL calls.
+// These track the last values sent to GL so we can skip no-op calls.
+static BlendMode g_CachedBlendMode = BLEND_NORMAL;
+static bool g_bCachedZWrite = true;
+static ZTestMode g_CachedZTestMode = ZTEST_OFF;
+static float g_fCachedZBias = 0.0f;
+static CullMode g_CachedCullMode = CULL_NONE;
+static uintptr_t g_CachedTextures[NUM_TextureUnit] = {};
+static bool g_bStateCacheValid = false;
+
+static void InvalidateStateCache()
+{
+	g_bStateCacheValid = false;
+	for (int i = 0; i < NUM_TextureUnit; ++i)
+		g_CachedTextures[i] = (uintptr_t)-1; // force rebind on next SetTexture
+}
+
 static void InvalidateObjects();
 
 static RageDisplay::RagePixelFormatDesc PIXEL_FORMAT_DESC[NUM_RagePixelFormat] =
@@ -887,8 +904,10 @@ bool RageDisplay_Legacy::BeginFrame() {
   glViewport(0, 0, fWidth, fHeight);
 
   glClearColor(0, 0, 0, 0);
+  InvalidateStateCache();
   SetZWrite(true);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  g_bStateCacheValid = true;
 
   bool beginFrame = RageDisplay::BeginFrame();
   if (beginFrame && UseOffscreenRenderTarget()) {
@@ -1683,6 +1702,11 @@ int RageDisplay_Legacy::GetNumTextureUnits() {
 }
 
 void RageDisplay_Legacy::SetTexture(TextureUnit tu, uintptr_t iTexture) {
+  // Skip if the texture is already bound to this unit
+  if (g_CachedTextures[tu] == iTexture)
+    return;
+  g_CachedTextures[tu] = iTexture;
+
   if (!SetTextureUnit(tu)) {
     return;
   }
@@ -1853,6 +1877,10 @@ bool RageDisplay_Legacy::IsEffectModeSupported(EffectMode effect) {
 }
 
 void RageDisplay_Legacy::SetBlendMode(BlendMode mode) {
+  if (g_bStateCacheValid && g_CachedBlendMode == mode)
+    return;
+  g_CachedBlendMode = mode;
+
   glEnable(GL_BLEND);
 
   if (glBlendEquation != nullptr) {
@@ -1953,9 +1981,18 @@ void RageDisplay_Legacy::ClearZBuffer() {
   SetZWrite(write);
 }
 
-void RageDisplay_Legacy::SetZWrite(bool b) { glDepthMask(b); }
+void RageDisplay_Legacy::SetZWrite(bool b) {
+  if (g_bStateCacheValid && g_bCachedZWrite == b)
+    return;
+  g_bCachedZWrite = b;
+  glDepthMask(b);
+}
 
 void RageDisplay_Legacy::SetZBias(float f) {
+  if (g_bStateCacheValid && g_fCachedZBias == f)
+    return;
+  g_fCachedZBias = f;
+
   float fNear = SCALE(f, 0.0f, 1.0f, 0.05f, 0.0f);
   float fFar = SCALE(f, 0.0f, 1.0f, 1.0f, 0.95f);
 
@@ -1963,6 +2000,10 @@ void RageDisplay_Legacy::SetZBias(float f) {
 }
 
 void RageDisplay_Legacy::SetZTestMode(ZTestMode mode) {
+  if (g_bStateCacheValid && g_CachedZTestMode == mode)
+    return;
+  g_CachedZTestMode = mode;
+
   glEnable(GL_DEPTH_TEST);
   switch (mode) {
     case ZTEST_OFF:
@@ -1978,12 +2019,6 @@ void RageDisplay_Legacy::SetZTestMode(ZTestMode mode) {
       FAIL_M(ssprintf("Invalid ZTestMode: %i", mode));
   }
 }
-
-void RageDisplay_Legacy::SetTextureWrapping(TextureUnit tu, bool b) {
-  /* This should be per-texture-unit state, but it's per-texture state in
-   * OpenGl, so we'll behave incorrectly if the same texture is used in more
-   * than one texture unit simultaneously with different wrapping. */
-  SetTextureUnit(tu);
 
   GLenum mode = b ? GL_REPEAT : GL_CLAMP_TO_EDGE;
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mode);
@@ -2047,6 +2082,10 @@ void RageDisplay_Legacy::SetLightDirectional(
 }
 
 void RageDisplay_Legacy::SetCullMode(CullMode mode) {
+  if (g_bStateCacheValid && g_CachedCullMode == mode)
+    return;
+  g_CachedCullMode = mode;
+
   if (mode != CULL_NONE) {
     glEnable(GL_CULL_FACE);
   }

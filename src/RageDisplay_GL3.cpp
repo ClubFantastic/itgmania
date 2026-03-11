@@ -26,6 +26,8 @@ using namespace RageDisplay_Legacy_Helpers;
 #include "ImGuiManager.h"
 #endif
 
+#include "TracyHelper.h"
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -722,6 +724,7 @@ const RageDisplay::RagePixelFormatDesc *RageDisplay_GL3::GetPixelFormatDesc(Rage
 
 bool RageDisplay_GL3::BeginFrame()
 {
+	ZoneScopedN("GL3::BeginFrame");
 	int fWidth = g_pWind->GetActualVideoModeParams().windowWidth;
 	int fHeight = g_pWind->GetActualVideoModeParams().windowHeight;
 
@@ -743,12 +746,14 @@ bool RageDisplay_GL3::BeginFrame()
 
 void RageDisplay_GL3::EndFrame()
 {
+	ZoneScopedN("GL3::EndFrame");
 	FrameLimitBeforeVsync( g_pWind->GetActualVideoModeParams().rate );
 	g_pWind->SwapBuffers();
 	FrameLimitAfterVsync();
 	glFinish();
 	g_pWind->Update();
 
+	FrameMark;
 	RageDisplay::EndFrame();
 }
 
@@ -961,6 +966,7 @@ void RageDisplay_GL3::EnsureQuadIBO( int iNumQuads )
 
 void RageDisplay_GL3::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawQuads");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -975,6 +981,7 @@ void RageDisplay_GL3::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVer
 
 void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawQuadStrip");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -985,6 +992,7 @@ void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNu
 
 void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawFan");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -995,6 +1003,7 @@ void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts
 
 void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawStrip");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1005,6 +1014,7 @@ void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVer
 
 void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawTriangles");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1015,6 +1025,7 @@ void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNu
 
 void RageDisplay_GL3::DrawCompiledGeometryInternal( const RageCompiledGeometry *p, int iMeshIndex )
 {
+	ZoneScopedN("GL3::DrawCompiledGeometry");
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1070,6 +1081,7 @@ void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNu
 
 void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
+	ZoneScopedN("GL3::DrawSymmetricQuadStrip");
 	int iNumPieces = (iNumVerts-3)/3;
 	int iNumTriangles = iNumPieces*4;
 	int iNumIndices = iNumTriangles*3;

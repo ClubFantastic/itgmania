@@ -1,4 +1,5 @@
 #include "ActorFrame.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -223,6 +224,7 @@ void ActorFrame::BeginDraw() {
 }
 
 void ActorFrame::DrawPrimitives() {
+  ZoneScopedN("ActorFrame::DrawPrimitives");
   if (m_bClearZBuffer) {
     LuaHelpers::ReportScriptErrorFmt(
         "ClearZBuffer not supported on ActorFrames");

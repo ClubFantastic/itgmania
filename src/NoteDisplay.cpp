@@ -1,4 +1,5 @@
 #include "NoteDisplay.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1644,6 +1645,7 @@ void NoteColumnRenderer::UpdateReceptorGhostStuff(Actor* receptor) const {
 }
 
 void NoteColumnRenderer::DrawPrimitives() {
+  ZoneScopedN("NoteColumn::DrawPrimitives");
   m_column_render_args.song_beat =
       m_field_render_args->player_state->GetDisplayedPosition()
           .m_fSongBeatVisible;

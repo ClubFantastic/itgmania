@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <climits>
@@ -896,6 +897,7 @@ void Player::SendComboMessages(
 }
 
 void Player::Update(float fDeltaTime) {
+  ZoneScopedN("Player::Update");
   const RageTimer now;
   // Don't update if we haven't been loaded yet.
   if (!m_bLoaded) {

@@ -461,6 +461,12 @@ if(HAS_GL3)
   target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_GL3 SUPPORT_GL3)
 endif()
 
+if(WITH_TRACY)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE TRACY_ENABLE)
+  target_include_directories("${SM_EXE_NAME}" PRIVATE /usr/include/Tracy)
+  target_link_libraries("${SM_EXE_NAME}" /usr/lib/libTracyClient.a)
+endif()
+
 list(APPEND SM_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
             "${SM_GENERATED_SRC_DIR}")
 

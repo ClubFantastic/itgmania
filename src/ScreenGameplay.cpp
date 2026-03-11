@@ -1,4 +1,5 @@
 #include "ScreenGameplay.h"
+#include "TracyHelper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1708,6 +1709,7 @@ void ScreenGameplay::GetMusicEndTiming(
 }
 
 void ScreenGameplay::Update(float fDeltaTime) {
+  ZoneScopedN("ScreenGameplay::Update");
   if (GAMESTATE->m_pCurSong == nullptr) {
     /* ScreenDemonstration will move us to the next screen.  We just need to
      * survive for one update without crashing.  We need to call Screen::Update
@@ -2065,6 +2067,7 @@ void ScreenGameplay::Update(float fDeltaTime) {
 }
 
 void ScreenGameplay::DrawPrimitives() {
+  ZoneScopedN("ScreenGameplay::DrawPrimitives");
   // ScreenGameplay::DrawPrimitives exists so that the notefield board can be
   // above the song background and underneath everything else.  This way, a
   // theme can put a screen filter in the notefield board and not have it
