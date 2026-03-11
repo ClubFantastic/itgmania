@@ -107,7 +107,7 @@ else()
                 "archutils/Unix/RunningUnderValgrind.h"
                 "archutils/Unix/SignalHandler.h"
                 "archutils/Unix/SpecialDirs.h")
-    if(X11_FOUND)
+    if(X11_FOUND AND NOT HAS_SDL3)
       list(APPEND SMDATA_OS_SRC "archutils/Unix/X11Helper.cpp")
       list(APPEND SMDATA_OS_HPP "archutils/Unix/X11Helper.h")
     endif()

@@ -452,6 +452,11 @@ endif()
 
 target_link_libraries("${SM_EXE_NAME}" ${SMDATA_LINK_LIB})
 
+if(HAS_SDL3)
+  target_link_libraries("${SM_EXE_NAME}" SDL3::SDL3)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_SDL3)
+endif()
+
 list(APPEND SM_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
             "${SM_GENERATED_SRC_DIR}")
 

@@ -8,12 +8,21 @@
 #if defined(WINDOWS)
 #include "ArchHooks/ArchHooks_Win32.h"
 #include "LoadingWindow/LoadingWindow_Win32.h"
+#if defined(HAS_SDL3)
+#include "LowLevelWindow/LowLevelWindow_SDL.h"
+#else
 #include "LowLevelWindow/LowLevelWindow_Win32.h"
+#endif
 #include "MemoryCard/MemoryCardDriverThreaded_Windows.h"
 
 inline const std::vector<std::string>& GetDefaultInputDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> inputDriverList = {
+      "SDL3", "Pump", "Para"};
+#else
   static const std::vector<std::string> inputDriverList = {
       "DirectInput", "Pump", "Para"};
+#endif
   return inputDriverList;
 }
 
@@ -31,11 +40,19 @@ inline const std::vector<std::string>& GetDefaultSoundDriverList() {
 #elif defined(MACOSX)
 #include "ArchHooks/ArchHooks_MacOSX.h"
 #include "LoadingWindow/LoadingWindow_MacOSX.h"
+#if defined(HAS_SDL3)
+#include "LowLevelWindow/LowLevelWindow_SDL.h"
+#else
 #include "LowLevelWindow/LowLevelWindow_MacOSX.h"
+#endif
 #include "MemoryCard/MemoryCardDriverThreaded_MacOSX.h"
 
 inline const std::vector<std::string>& GetDefaultInputDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> inputDriverList = {"SDL3"};
+#else
   static const std::vector<std::string> inputDriverList = {"HID", "NSEvent"};
+#endif
   return inputDriverList;
 }
 
@@ -51,7 +68,11 @@ inline const std::vector<std::string>& GetDefaultSoundDriverList() {
 
 #elif defined(UNIX)
 #include "ArchHooks/ArchHooks_Unix.h"
+#if defined(HAS_SDL3)
+#include "LowLevelWindow/LowLevelWindow_SDL.h"
+#else
 #include "LowLevelWindow/LowLevelWindow_X11.h"
+#endif
 
 #if defined(LINUX)
 #include "MemoryCard/MemoryCardDriverThreaded_Linux.h"
@@ -63,13 +84,22 @@ inline const std::vector<std::string>& GetDefaultSoundDriverList() {
 
 #if defined(LINUX)
 inline const std::vector<std::string>& GetDefaultInputDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> inputDriverList = {
+      "SDL3", "LinuxEvent", "LinuxJoystick"};
+#else
   static const std::vector<std::string> inputDriverList = {
       "X11", "LinuxEvent", "LinuxJoystick"};
+#endif
   return inputDriverList;
 }
 #else
 inline const std::vector<std::string>& GetDefaultInputDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> inputDriverList = {"SDL3"};
+#else
   static const std::vector<std::string> inputDriverList = {"X11"};
+#endif
   return inputDriverList;
 }
 #endif

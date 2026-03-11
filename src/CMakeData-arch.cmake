@@ -127,7 +127,12 @@ source_group("Arch Specific\\\\Memory Card"
 list(APPEND SMDATA_ARCH_LOWLEVEL_SRC "arch/LowLevelWindow/LowLevelWindow.cpp")
 list(APPEND SMDATA_ARCH_LOWLEVEL_HPP "arch/LowLevelWindow/LowLevelWindow.h")
 
-if(WIN32)
+if(HAS_SDL3)
+  list(APPEND SMDATA_ARCH_LOWLEVEL_SRC
+              "arch/LowLevelWindow/LowLevelWindow_SDL.cpp")
+  list(APPEND SMDATA_ARCH_LOWLEVEL_HPP
+              "arch/LowLevelWindow/LowLevelWindow_SDL.h")
+elseif(WIN32)
   list(APPEND SMDATA_ARCH_LOWLEVEL_SRC
               "arch/LowLevelWindow/LowLevelWindow_Win32.cpp")
   list(APPEND SMDATA_ARCH_LOWLEVEL_HPP
@@ -144,7 +149,7 @@ else(UNIX)
     list(APPEND SMDATA_ARCH_LOWLEVEL_HPP
                 "arch/LowLevelWindow/LowLevelWindow_X11.h")
   endif()
-endif(WIN32)
+endif()
 
 source_group("Arch Specific\\\\Low Level Window"
              FILES
@@ -255,6 +260,11 @@ list(APPEND SMDATA_ARCH_INPUT_HPP "arch/InputHandler/InputHandler.h"
             "arch/InputHandler/InputHandler_PumpHID.h"
             "arch/InputHandler/InputHandler_MonkeyKeyboard.h")
 
+if(HAS_SDL3)
+  list(APPEND SMDATA_ARCH_INPUT_SRC "arch/InputHandler/InputHandler_SDL.cpp")
+  list(APPEND SMDATA_ARCH_INPUT_HPP "arch/InputHandler/InputHandler_SDL.h")
+endif()
+
 if(WIN32)
   list(APPEND SMDATA_ARCH_INPUT_SRC
               "arch/InputHandler/InputHandler_DirectInput.cpp"
@@ -300,7 +310,7 @@ else() # Unix/Linux
                 "arch/InputHandler/InputHandler_Linux_PIUIO.h"
                 "arch/InputHandler/InputHandler_SextetStream.h")
   endif()
-  if(X11_FOUND)
+  if(X11_FOUND AND NOT HAS_SDL3)
     list(APPEND SMDATA_ARCH_INPUT_SRC "arch/InputHandler/InputHandler_X11.cpp")
     list(APPEND SMDATA_ARCH_INPUT_HPP "arch/InputHandler/InputHandler_X11.h")
   endif()

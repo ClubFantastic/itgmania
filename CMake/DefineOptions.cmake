@@ -66,3 +66,7 @@ if(LINUX)
   option(WITH_X11 "Build with X11 support" ON)
 endif()
 
+option(WITH_SDL3 "Build with SDL3 for windowing and input." OFF)
+
+option(WITH_MINIMAID "Build with Minimaid support." ON)
+

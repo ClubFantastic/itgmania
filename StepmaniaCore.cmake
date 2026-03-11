@@ -156,6 +156,12 @@ endif()
 # Dependencies go here.
 include(ExternalProject)
 
+set(HAS_SDL3 FALSE)
+if(WITH_SDL3)
+  find_package(SDL3 REQUIRED)
+  set(HAS_SDL3 TRUE)
+endif()
+
 find_package(nasm)
 find_package(yasm)
 find_package(Iconv)
