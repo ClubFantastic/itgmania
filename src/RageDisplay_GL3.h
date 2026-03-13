@@ -176,6 +176,13 @@ private:
 	int m_iCelShadedStage;
 	bool m_bInvertY;
 
+	// GL state cache — skip redundant state changes
+	BlendMode m_CachedBlendMode;
+	bool m_bCachedZWrite;
+	ZTestMode m_CachedZTestMode;
+	float m_fCachedZBias;
+	CullMode m_CachedCullMode;
+
 	// Matrix cache — dirty flags to avoid redundant uniform uploads
 	bool m_bMatrixDirty;
 	// Cache the last uploaded matrices so we can detect changes

@@ -491,6 +491,13 @@ RageDisplay_GL3::RageDisplay_GL3()
 		m_Lights[i].enabled = false;
 
 	memset(m_EffectPrograms, 0, sizeof(m_EffectPrograms));
+
+	m_CachedBlendMode = BLEND_NORMAL;
+	m_bCachedZWrite = true;
+	m_CachedZTestMode = ZTEST_OFF;
+	m_fCachedZBias = 0.0f;
+	m_CachedCullMode = CULL_NONE;
+
 }
 
 RageDisplay_GL3::~RageDisplay_GL3()
@@ -730,6 +737,16 @@ bool RageDisplay_GL3::BeginFrame()
 
 	glViewport( 0, 0, fWidth, fHeight );
 	glClearColor( 0, 0, 0, 0 );
+
+	// Invalidate all caches — ImGui or other subsystems may have changed GL state
+	InvalidateMatrixCache();
+	// Force GL state cache to unknown so next Set* call applies the state
+	m_CachedBlendMode = (BlendMode)-1;
+	m_bCachedZWrite = !true; // force next SetZWrite to apply
+	m_CachedZTestMode = (ZTestMode)-1;
+	m_fCachedZBias = -999.0f;
+	m_CachedCullMode = (CullMode)-1;
+
 	SetZWrite( true );
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
@@ -738,15 +755,13 @@ bool RageDisplay_GL3::BeginFrame()
 	glBindVertexArray( m_VAO );
 	glDisable( GL_SCISSOR_TEST );
 
-	// Invalidate caches — ImGui or other subsystems may have changed GL state
-	InvalidateMatrixCache();
-
 	return RageDisplay::BeginFrame();
 }
 
 void RageDisplay_GL3::EndFrame()
 {
 	ZoneScopedN("GL3::EndFrame");
+
 	FrameLimitBeforeVsync( g_pWind->GetActualVideoModeParams().rate );
 	g_pWind->SwapBuffers();
 	FrameLimitAfterVsync();
@@ -989,6 +1004,7 @@ void RageDisplay_GL3::DrawQuadsInternal( const RageSpriteVertex v[], int iNumVer
 void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
 	ZoneScopedN("GL3::DrawQuadStrip");
+
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1000,6 +1016,7 @@ void RageDisplay_GL3::DrawQuadStripInternal( const RageSpriteVertex v[], int iNu
 void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts )
 {
 	ZoneScopedN("GL3::DrawFan");
+
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1011,6 +1028,7 @@ void RageDisplay_GL3::DrawFanInternal( const RageSpriteVertex v[], int iNumVerts
 void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
 	ZoneScopedN("GL3::DrawStrip");
+
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1022,6 +1040,7 @@ void RageDisplay_GL3::DrawStripInternal( const RageSpriteVertex v[], int iNumVer
 void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNumVerts )
 {
 	ZoneScopedN("GL3::DrawTriangles");
+
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1033,6 +1052,7 @@ void RageDisplay_GL3::DrawTrianglesInternal( const RageSpriteVertex v[], int iNu
 void RageDisplay_GL3::DrawCompiledGeometryInternal( const RageCompiledGeometry *p, int iMeshIndex )
 {
 	ZoneScopedN("GL3::DrawCompiledGeometry");
+
 	glUseProgram( m_CurrentProgram );
 	SendCurrentMatrices();
 	SetSpriteUniforms();
@@ -1059,6 +1079,7 @@ void RageDisplay_GL3::DrawCompiledGeometryInternal( const RageCompiledGeometry *
 
 void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNumVerts, float fLineWidth )
 {
+
 	if (!GetActualVideoModeParams().bSmoothLines)
 	{
 		RageDisplay::DrawLineStripInternal(v, iNumVerts, fLineWidth );
@@ -1089,6 +1110,7 @@ void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNu
 void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
 {
 	ZoneScopedN("GL3::DrawSymmetricQuadStrip");
+
 	int iNumPieces = (iNumVerts-3)/3;
 	int iNumTriangles = iNumPieces*4;
 	int iNumIndices = iNumTriangles*3;
@@ -1391,6 +1413,10 @@ bool RageDisplay_GL3::SupportsTextureFormat( RagePixelFormat pixfmt, bool bRealt
 
 void RageDisplay_GL3::SetBlendMode( BlendMode mode )
 {
+	if (mode == m_CachedBlendMode)
+		return;
+
+	m_CachedBlendMode = mode;
 	glEnable( GL_BLEND );
 
 	if (mode == BLEND_INVERT_DEST)
@@ -1464,6 +1490,7 @@ bool RageDisplay_GL3::IsZTestEnabled() const
 
 void RageDisplay_GL3::ClearZBuffer()
 {
+
 	bool write = IsZWriteEnabled();
 	SetZWrite( true );
 	glClear( GL_DEPTH_BUFFER_BIT );
@@ -1472,11 +1499,19 @@ void RageDisplay_GL3::ClearZBuffer()
 
 void RageDisplay_GL3::SetZWrite( bool b )
 {
+	if (b == m_bCachedZWrite)
+		return;
+
+	m_bCachedZWrite = b;
 	glDepthMask( b );
 }
 
 void RageDisplay_GL3::SetZBias( float f )
 {
+	if (f == m_fCachedZBias)
+		return;
+
+	m_fCachedZBias = f;
 	float fNear = SCALE( f, 0.0f, 1.0f, 0.05f, 0.0f );
 	float fFar = SCALE( f, 0.0f, 1.0f, 1.0f, 0.95f );
 	glDepthRange( fNear, fFar );
@@ -1484,6 +1519,10 @@ void RageDisplay_GL3::SetZBias( float f )
 
 void RageDisplay_GL3::SetZTestMode( ZTestMode mode )
 {
+	if (mode == m_CachedZTestMode)
+		return;
+
+	m_CachedZTestMode = mode;
 	glEnable( GL_DEPTH_TEST );
 	switch( mode )
 	{
@@ -1497,6 +1536,10 @@ void RageDisplay_GL3::SetZTestMode( ZTestMode mode )
 
 void RageDisplay_GL3::SetCullMode( CullMode mode )
 {
+	if (mode == m_CachedCullMode)
+		return;
+
+	m_CachedCullMode = mode;
 	if (mode != CULL_NONE)
 		glEnable( GL_CULL_FACE );
 	switch( mode )
@@ -1675,6 +1718,7 @@ uintptr_t RageDisplay_GL3::GetRenderTarget()
 
 void RageDisplay_GL3::SetRenderTarget( uintptr_t iTexture, bool bPreserveTexture )
 {
+
 	InvalidateMatrixCache(); // Projection/viewport changes
 
 	if (iTexture == 0)
