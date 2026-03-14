@@ -34,9 +34,11 @@ void ArchHooks_Emscripten::DumpDebugInfo()
 
 void ArchHooks::MountInitialFilesystems( const RString &sDirOfExecutable )
 {
-	/* In the browser, all game data is preloaded into Emscripten's virtual
-	 * filesystem at the executable directory. Mount it read-only at root. */
-	FILEMAN->Mount( "dirro", sDirOfExecutable, "/" );
+	/* In the browser, game data is served from the same origin as the wasm.
+	 * Use the HTTP driver to fetch files lazily on demand.
+	 * The base URL is the directory containing the HTML page. */
+	RString sBaseURL = "gamedata/";
+	FILEMAN->Mount( "http", sBaseURL, "/" );
 }
 
 void ArchHooks::MountUserFilesystems( const RString &sDirOfExecutable )
