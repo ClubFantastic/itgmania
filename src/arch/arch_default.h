@@ -32,8 +32,13 @@ inline const std::vector<std::string>& GetDefaultMovieDriverList() {
 }
 
 inline const std::vector<std::string>& GetDefaultSoundDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> soundDriverList = {
+      "DirectSound-sw", "WaveOut", "WDMKS", "SDL", "Null"};
+#else
   static const std::vector<std::string> soundDriverList = {
       "DirectSound-sw", "WaveOut", "WDMKS", "Null"};
+#endif
   return soundDriverList;
 }
 
@@ -62,7 +67,12 @@ inline const std::vector<std::string>& GetDefaultMovieDriverList() {
 }
 
 inline const std::vector<std::string>& GetDefaultSoundDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> soundDriverList = {
+      "AudioUnit", "SDL", "Null"};
+#else
   static const std::vector<std::string> soundDriverList = {"AudioUnit", "Null"};
+#endif
   return soundDriverList;
 }
 
@@ -116,8 +126,13 @@ inline const std::vector<std::string>& GetDefaultMovieDriverList() {
 // as PulseAudio will successfully Init() but not actually work if the
 // PulseAudio daemon has been suspended by/for jackd.
 inline const std::vector<std::string>& GetDefaultSoundDriverList() {
+#if defined(HAS_SDL3)
+  static const std::vector<std::string> soundDriverList = {
+      "Pulse", "ALSA-sw", "OSS", "JACK", "SDL", "Null"};
+#else
   static const std::vector<std::string> soundDriverList = {
       "Pulse", "ALSA-sw", "OSS", "JACK", "Null"};
+#endif
   return soundDriverList;
 }
 #else

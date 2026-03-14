@@ -73,6 +73,11 @@ else() # Unix
   endif()
 endif()
 
+if(HAS_SDL3)
+  list(APPEND SMDATA_ARCH_SOUND_SRC "arch/Sound/RageSoundDriver_SDL.cpp")
+  list(APPEND SMDATA_ARCH_SOUND_HPP "arch/Sound/RageSoundDriver_SDL.h")
+endif()
+
 source_group("Arch Specific\\\\Sound"
              FILES
              ${SMDATA_ARCH_SOUND_SRC}
