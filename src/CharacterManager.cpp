@@ -107,7 +107,7 @@ Character* CharacterManager::GetRandomCharacter() {
   if (apCharacters.size()) {
     return apCharacters[RandomInt(apCharacters.size())];
   } else {
-    return GetDefaultCharacter();
+    return GetDefaultCharacter();  // may return nullptr on Emscripten
   }
 }
 
@@ -118,8 +118,12 @@ Character* CharacterManager::GetDefaultCharacter() {
     }
   }
 
+#ifdef EMSCRIPTEN
+  return nullptr;
+#else
   /* We always have the default character. */
   FAIL_M("There must be a default character available!");
+#endif
 }
 
 void CharacterManager::DemandGraphics() {

@@ -355,7 +355,9 @@ void GameState::Reset() {
     } else {
       m_pCurCharacters[p] = CHARMAN->GetDefaultCharacter();
     }
+#ifndef EMSCRIPTEN
     ASSERT(m_pCurCharacters[p] != nullptr);
+#endif
   }
 
   m_bTemporaryEventMode = false;
