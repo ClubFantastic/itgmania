@@ -262,17 +262,24 @@ elseif(EMSCRIPTEN)
     -sUSE_SDL=3
     -sWASM=1
     -sALLOW_MEMORY_GROWTH=1
+    -sASYNCIFY
+    -sASYNCIFY_STACK_SIZE=65536
     -sFULL_ES3=1
     -sMAX_WEBGL_VERSION=2
     -sMIN_WEBGL_VERSION=2
     -sNO_EXIT_RUNTIME=1
-    -sASSERTIONS=1
+    -sASSERTIONS=2
     -sSTACK_SIZE=1048576
     -sPTHREAD_POOL_SIZE=4
+    -pthread
+    -g
+    --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/emscripten_shell.html
+    -sEXPORTED_RUNTIME_METHODS=callMain
   )
   target_compile_options("${SM_EXE_NAME}" PRIVATE
     -sUSE_SDL=3
     -pthread
+    -g
   )
 
 else() # Linux

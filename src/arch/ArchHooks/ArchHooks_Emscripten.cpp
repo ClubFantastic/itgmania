@@ -10,7 +10,31 @@
 
 void ArchHooks_Emscripten::Init()
 {
-	/* No signal handlers or crash handlers in the browser. */
+	/* Resume AudioContext on first user gesture (browser autoplay policy). */
+	EM_ASM({
+		var resumed = false;
+		function resumeAudio() {
+			if (resumed) return;
+			resumed = true;
+			if (typeof SDL !== 'undefined' && SDL.audioContext &&
+				SDL.audioContext.state === 'suspended') {
+				SDL.audioContext.resume();
+			}
+			/* Also try the global AudioContext list */
+			var ctx = window._emscripten_audio_contexts;
+			if (ctx) {
+				for (var i = 0; i < ctx.length; i++) {
+					if (ctx[i].state === 'suspended') ctx[i].resume();
+				}
+			}
+			document.removeEventListener('click', resumeAudio);
+			document.removeEventListener('keydown', resumeAudio);
+			document.removeEventListener('touchstart', resumeAudio);
+		}
+		document.addEventListener('click', resumeAudio);
+		document.addEventListener('keydown', resumeAudio);
+		document.addEventListener('touchstart', resumeAudio);
+	});
 }
 
 int64_t ArchHooks::GetSystemTimeInMicroseconds()
