@@ -23,22 +23,30 @@ set(SM_GENERATED_SRC_DIR "${SM_GENERATED_DIR}/src")
 set(SM_EXE_NAME "ITGmania")
 
 # Some OS specific helpers.
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-  set(LINUX TRUE)
-else()
+if(CMAKE_SYSTEM_NAME MATCHES "Emscripten" OR EMSCRIPTEN)
+  set(EMSCRIPTEN TRUE)
   set(LINUX FALSE)
-endif()
-
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-  set(MACOSX TRUE)
-else()
   set(MACOSX FALSE)
-endif()
-
-if(CMAKE_SYSTEM_NAME MATCHES "BSD")
-  set(BSD TRUE)
-else()
   set(BSD FALSE)
+else()
+  set(EMSCRIPTEN FALSE)
+  if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    set(LINUX TRUE)
+  else()
+    set(LINUX FALSE)
+  endif()
+
+  if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set(MACOSX TRUE)
+  else()
+    set(MACOSX FALSE)
+  endif()
+
+  if(CMAKE_SYSTEM_NAME MATCHES "BSD")
+    set(BSD TRUE)
+  else()
+    set(BSD FALSE)
+  endif()
 endif()
 
 # Allow for finding our libraries in a standard location.
@@ -163,6 +171,21 @@ if(WITH_SDL3)
 endif()
 
 set(HAS_GL3 ${WITH_GL3})
+
+if(EMSCRIPTEN)
+  # Emscripten provides its own SDL3 port, pthreads emulation, and OpenGL ES.
+  # Skip native dependency detection entirely.
+  set(HAS_PTHREAD TRUE)
+  set(HAS_PULSE FALSE)
+  set(HAS_ALSA FALSE)
+  set(HAS_JACK FALSE)
+  set(HAS_OSS FALSE)
+  set(HAS_GTK3 FALSE)
+  set(HAS_X11 FALSE)
+  set(HAS_XRANDR FALSE)
+  set(HAS_LIBXTST FALSE)
+  set(HAS_XINERAMA FALSE)
+else()
 
 find_package(nasm)
 find_package(yasm)
@@ -352,6 +375,7 @@ elseif(LINUX OR BSD)
 
   find_package(udev REQUIRED)
 endif(WIN32) # LINUX OR BSD, APPLE
+endif() # EMSCRIPTEN else
 
 configure_file("${SM_SRC_DIR}/config.hpp.in"
                "${SM_GENERATED_SRC_DIR}/config.hpp")

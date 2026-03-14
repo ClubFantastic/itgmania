@@ -173,7 +173,16 @@ void Init()
 GLuint CompileShader( GLenum type, const char *source )
 {
 	GLuint shader = glCreateShader( type );
-	glShaderSource( shader, 1, &source, nullptr );
+
+	/* Prepend the correct GLSL version header.  The shader body strings
+	 * omit #version so they work on both desktop GL and WebGL2/GLES3. */
+#ifdef EMSCRIPTEN
+	const char *version = "#version 300 es\nprecision mediump float;\n";
+#else
+	const char *version = "#version 330 core\n";
+#endif
+	const char *sources[2] = { version, source };
+	glShaderSource( shader, 2, sources, nullptr );
 	glCompileShader( shader );
 
 	GLint status;

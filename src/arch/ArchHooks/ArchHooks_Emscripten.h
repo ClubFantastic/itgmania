@@ -1,61 +1,32 @@
-#ifndef RAGE_DISPLAY_OGL_HELPERS_H
-#define RAGE_DISPLAY_OGL_HELPERS_H
+#ifndef ARCH_HOOKS_EMSCRIPTEN_H
+#define ARCH_HOOKS_EMSCRIPTEN_H
 
-/* Import RageDisplay, for types.  Do not include RageDisplay_Legacy.h. */
+#include "ArchHooks.h"
+
 #include <cstdint>
-#include <string>
 
-#include "RageDisplay.h"
+class ArchHooks_Emscripten: public ArchHooks
+{
+public:
+	void Init();
+	RString GetArchName() const { return "Emscripten"; }
+	void DumpDebugInfo();
 
-#if defined(_WIN32)
-#include <windows.h>
-#endif
+	int64_t GetSystemTimeInMicroseconds();
 
-#ifdef EMSCRIPTEN
-#include <GLES3/gl3.h>
-#else
-#include <GL/glew.h>
-#endif
-
-/* Windows defines GL_EXT_paletted_texture incompletely: */
-#ifndef GL_TEXTURE_INDEX_SIZE_EXT
-#define GL_TEXTURE_INDEX_SIZE_EXT 0x80ED
-#endif
-
-/** @brief Utilities for working with the RageDisplay. */
-namespace RageDisplay_Legacy_Helpers {
-void Init();
-std::string GLToString(GLenum e);
-};  // namespace RageDisplay_Legacy_Helpers
-
-class RenderTarget {
- public:
-  virtual ~RenderTarget() {}
-  virtual void Create(
-      const RenderTargetParam& param, int& iTextureWidthOut,
-      int& iTextureHeightOut) = 0;
-
-  virtual uintptr_t GetTexture() const = 0;
-
-  /* Render to this RenderTarget. */
-  virtual void StartRenderingTo() = 0;
-
-  /* Stop rendering to this RenderTarget.  Update the texture, if necessary, and
-   * make it available. */
-  virtual void FinishRenderingTo() = 0;
-
-  virtual bool InvertY() const { return false; }
-
-  const RenderTargetParam& GetParam() const { return m_Param; }
-
- protected:
-  RenderTargetParam m_Param;
+	void MountInitialFilesystems( const RString &sDirOfExecutable );
+	float GetDisplayAspectRatio() { return 16.0f/9; }
 };
+
+#ifdef ARCH_HOOKS
+#error "More than one ArchHooks selected!"
+#endif
+#define ARCH_HOOKS ArchHooks_Emscripten
 
 #endif
 
 /*
- * Copyright (c) 2001-2011 Chris Danford, Glenn Maynard, Colby Klein
+ * (c) 2025 ITGmania contributors
  * All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a

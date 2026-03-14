@@ -27,6 +27,10 @@
 #include "arch/ArchHooks/ArchHooks.h"
 #include "global.h"
 
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 static RageTimer g_GameplayTimer;
 
 static Preference<bool> g_bNeverBoostAppPriority(
@@ -168,6 +172,7 @@ void DoChangeTheme() {
   g_NewTheme = std::string();
 }
 
+<<<<<<< HEAD
 void DoChangeGame() {
   const Game* g = GAMEMAN->StringToGame(g_NewGame);
   ASSERT(g != nullptr);
@@ -229,6 +234,24 @@ void DoChangeGame() {
   g_NewGame = std::string();
   g_NewTheme = std::string();
 }
+
+static void RunOneFrame() {
+  if (!g_NewGame.empty()) {
+    DoChangeGame();
+  }
+  if (!g_NewTheme.empty()) {
+    DoChangeTheme();
+  }
+
+  CheckFocus();
+
+  GameLoop::UpdateAllButDraw(false);
+
+  CallEveryNFrames(500, CheckInputDevices);
+
+  SCREENMAN->Draw();
+}
+
 }  // namespace
 
 void GameLoop::UpdateAllButDraw(bool bRunningFromVBLANK) {
@@ -297,22 +320,16 @@ void GameLoop::RunGameLoop() {
     HOOKS->BoostPriority();
   }
 
+#ifdef EMSCRIPTEN
+  /* Emscripten cannot use a blocking loop. Hand control to the browser
+   * via emscripten_set_main_loop, which calls RunOneFrame on each
+   * requestAnimationFrame. fps=0 means use the browser's refresh rate. */
+  emscripten_set_main_loop(RunOneFrame, 0, 1);
+#else
   while (!ArchHooks::UserQuit()) {
-    if (!g_NewGame.empty()) {
-      DoChangeGame();
-    }
-    if (!g_NewTheme.empty()) {
-      DoChangeTheme();
-    }
-
-    CheckFocus();
-
-    UpdateAllButDraw(false);
-
-    CallEveryNFrames(500, CheckInputDevices);
-
-    SCREENMAN->Draw();
+    RunOneFrame();
   }
+#endif
 
   // If we ended mid-game, finish up.
   GAMESTATE->SaveLocalData();

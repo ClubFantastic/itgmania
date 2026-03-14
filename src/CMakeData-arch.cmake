@@ -85,15 +85,18 @@ source_group("Arch Specific\\\\Sound"
 
 list(APPEND SMDATA_ARCH_MOVIE_TEXTURE_SRC
             "arch/MovieTexture/MovieTexture.cpp"
-            "arch/MovieTexture/MovieTexture_FFMpeg.cpp"
             "arch/MovieTexture/MovieTexture_Generic.cpp"
             "arch/MovieTexture/MovieTexture_Null.cpp")
 
 list(APPEND SMDATA_ARCH_MOVIE_TEXTURE_HPP
             "arch/MovieTexture/MovieTexture.h"
-            "arch/MovieTexture/MovieTexture_FFMpeg.h"
             "arch/MovieTexture/MovieTexture_Generic.h"
             "arch/MovieTexture/MovieTexture_Null.h")
+
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_ARCH_MOVIE_TEXTURE_SRC "arch/MovieTexture/MovieTexture_FFMpeg.cpp")
+  list(APPEND SMDATA_ARCH_MOVIE_TEXTURE_HPP "arch/MovieTexture/MovieTexture_FFMpeg.h")
+endif()
 
 source_group("Arch Specific\\\\Movie Texture"
              FILES
@@ -349,7 +352,11 @@ source_group("Arch Specific\\\\Dialog"
 list(APPEND SMDATA_ARCH_HOOKS_SRC "arch/ArchHooks/ArchHooks.cpp")
 list(APPEND SMDATA_ARCH_HOOKS_HPP "arch/ArchHooks/ArchHooks.h")
 
-if(NOT APPLE)
+if(EMSCRIPTEN)
+  list(APPEND SMDATA_ARCH_HOOKS_SRC "arch/ArchHooks/ArchHooksUtil.cpp"
+              "arch/ArchHooks/ArchHooks_Emscripten.cpp")
+  list(APPEND SMDATA_ARCH_HOOKS_HPP "arch/ArchHooks/ArchHooks_Emscripten.h")
+elseif(NOT APPLE)
   list(APPEND SMDATA_ARCH_HOOKS_SRC "arch/ArchHooks/ArchHooksUtil.cpp")
   if(WIN32)
     list(APPEND SMDATA_ARCH_HOOKS_SRC "arch/ArchHooks/ArchHooks_Win32.cpp"
@@ -362,7 +369,7 @@ if(NOT APPLE)
 else(NOT APPLE)
   list(APPEND SMDATA_ARCH_HOOKS_SRC "arch/ArchHooks/ArchHooks_MacOSX.mm")
   list(APPEND SMDATA_ARCH_HOOKS_HPP "arch/ArchHooks/ArchHooks_MacOSX.h")
-endif(NOT APPLE)
+endif()
 
 source_group("Arch Specific\\\\Arch Hooks"
              FILES

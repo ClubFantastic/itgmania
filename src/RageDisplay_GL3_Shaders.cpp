@@ -1,4 +1,6 @@
-/* Embedded GLSL 3.30 shader source for RageDisplay_GL3. */
+/* Embedded GLSL shader source for RageDisplay_GL3.
+ * Shader bodies omit the #version line; it is prepended by CompileShader()
+ * so the same sources work on both desktop GL 3.3 and WebGL2/GLES3. */
 
 #include "global.h"
 #include "RageDisplay_GL3_Shaders.h"
@@ -10,7 +12,7 @@ namespace GL3Shaders
 // Sprite vertex shader — used for all RageSpriteVertex rendering
 // ============================================================
 const char *g_SpriteVertSrc = R"GLSL(
-#version 330 core
+
 
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
@@ -40,7 +42,7 @@ void main() {
 // Sprite fragment shader — modulate/glow/add + alpha test
 // ============================================================
 const char *g_SpriteFragSrc = R"GLSL(
-#version 330 core
+
 
 in vec4 v_Color;
 in vec2 v_TexCoord;
@@ -76,7 +78,7 @@ void main() {
 // Lit sprite vertex shader — same as sprite but passes normal/position for lighting
 // ============================================================
 const char *g_LitSpriteVertSrc = R"GLSL(
-#version 330 core
+
 
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
@@ -105,7 +107,7 @@ void main() {
 // Lit sprite fragment shader — Phong lighting + texture modes
 // ============================================================
 const char *g_LitSpriteFragSrc = R"GLSL(
-#version 330 core
+
 
 in vec4 v_Color;
 in vec2 v_TexCoord;
@@ -180,7 +182,7 @@ void main() {
 // ============================================================
 
 const char *g_EffectFragUnpremultiply = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -196,7 +198,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragColorBurn = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -214,7 +216,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragColorDodge = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -232,7 +234,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragVividLight = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -256,7 +258,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragHardMix = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -271,7 +273,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragOverlay = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -289,7 +291,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragScreen = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -304,7 +306,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragYUYV422 = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;
@@ -334,7 +336,7 @@ void main() {
 )GLSL";
 
 const char *g_EffectFragDistanceField = R"GLSL(
-#version 330 core
+
 in vec4 v_Color;
 in vec2 v_TexCoord;
 uniform sampler2D u_Texture0;

@@ -90,6 +90,13 @@ else()
                 "archutils/Win32/WindowIcon.h"
                 "archutils/Win32/WindowsDialogBox.h"
                 "archutils/Win32/WindowsResources.h")
+  elseif(EMSCRIPTEN)
+    # Emscripten: minimal archutils, no signals/crash handler/valgrind
+    list(APPEND SMDATA_OS_HPP "archutils/Unix/arch_setup.h")
+    if(HAS_PTHREAD)
+      list(APPEND SMDATA_OS_SRC "archutils/Common/PthreadHelpers.cpp")
+      list(APPEND SMDATA_OS_HPP "archutils/Common/PthreadHelpers.h")
+    endif()
   else() # Unix
     list(APPEND SMDATA_OS_SRC # TODO: X11 check, crash handler check
                 "archutils/Unix/AssertionHandler.cpp"
@@ -119,7 +126,7 @@ else()
   source_group("OS Specific" FILES ${SMDATA_OS_SRC} ${SMDATA_OS_HPP})
 endif()
 
-if(APPLE OR LINUX)
+if((APPLE OR LINUX) AND NOT EMSCRIPTEN)
   if(WITH_CRASH_HANDLER)
     list(APPEND SMDATA_OS_UNIX_CRASH_SRC
                 "archutils/Unix/Backtrace.cpp"

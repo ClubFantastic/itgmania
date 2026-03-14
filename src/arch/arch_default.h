@@ -76,6 +76,25 @@ inline const std::vector<std::string>& GetDefaultSoundDriverList() {
   return soundDriverList;
 }
 
+#elif defined(EMSCRIPTEN)
+#include "ArchHooks/ArchHooks_Emscripten.h"
+#include "LowLevelWindow/LowLevelWindow_SDL.h"
+
+inline const std::vector<RString>& GetDefaultInputDriverList() {
+	static const std::vector<RString> inputDriverList = { "SDL3" };
+	return inputDriverList;
+}
+
+inline const std::vector<RString>& GetDefaultMovieDriverList() {
+	static const std::vector<RString> movieDriverList = { "Null" };
+	return movieDriverList;
+}
+
+inline const std::vector<RString>& GetDefaultSoundDriverList() {
+	static const std::vector<RString> soundDriverList = { "SDL", "Null" };
+	return soundDriverList;
+}
+
 #elif defined(UNIX)
 #include "ArchHooks/ArchHooks_Unix.h"
 #if defined(HAS_SDL3)

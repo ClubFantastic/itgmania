@@ -251,6 +251,30 @@ elseif(APPLE)
                      COMMAND ${CMAKE_COMMAND} -E copy
                              "${SM_XCODE_DIR}/logo.icns"
                              "$<TARGET_FILE_DIR:ITGmania>/../Resources/")
+elseif(EMSCRIPTEN)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE UNIX EMSCRIPTEN)
+  set_target_properties("${SM_EXE_NAME}"
+                        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${SM_ROOT_DIR}"
+                                   SUFFIX ".html")
+
+  # Emscripten link flags
+  target_link_options("${SM_EXE_NAME}" PRIVATE
+    -sUSE_SDL=3
+    -sWASM=1
+    -sALLOW_MEMORY_GROWTH=1
+    -sFULL_ES3=1
+    -sMAX_WEBGL_VERSION=2
+    -sMIN_WEBGL_VERSION=2
+    -sNO_EXIT_RUNTIME=1
+    -sASSERTIONS=1
+    -sSTACK_SIZE=1048576
+    -sPTHREAD_POOL_SIZE=4
+  )
+  target_compile_options("${SM_EXE_NAME}" PRIVATE
+    -sUSE_SDL=3
+    -pthread
+  )
+
 else() # Linux
   set_target_properties("${SM_EXE_NAME}"
                         PROPERTIES RUNTIME_OUTPUT_DIRECTORY
@@ -334,7 +358,6 @@ list(APPEND SMDATA_LINK_LIB "lua-5.1" "miniz")
 
 list(APPEND SMDATA_LINK_LIB "mad"
                             "pcre"
-                            "glew"
                             "tomcrypt"
                             "tommath"
                             "libjpeg-turbo"
@@ -344,8 +367,11 @@ list(APPEND SMDATA_LINK_LIB "mad"
                             "vorbisfile"
                             "vorbis"
                             "ogg"
-                            "ixwebsocket"
-							"hidapi")
+                            "ixwebsocket")
+
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_LINK_LIB "glew" "hidapi")
+endif()
 
 if(WIN32)
   list(APPEND SMDATA_LINK_LIB
@@ -400,6 +426,10 @@ elseif(APPLE)
               "${MAC_FRAME_COREMEDIA}"
               "${MAC_FRAME_COREVIDEO}"
               "${MAC_FRAME_VIDEOTOOLBOX}")
+elseif(EMSCRIPTEN)
+  # Emscripten: no native libs needed — SDL3, OpenGL ES, pthreads all provided by emcc.
+  # FFmpeg is not available; movie textures will use the Null driver.
+  list(REMOVE_DUPLICATES SMDATA_LINK_LIB)
 else() # Unix / Linux TODO: Remember to find and locate the zip archive files.
   list(APPEND SMDATA_LINK_LIB
               "${SM_FFMPEG_LIB}/libavformat.a"
@@ -453,7 +483,13 @@ endif()
 target_link_libraries("${SM_EXE_NAME}" ${SMDATA_LINK_LIB})
 
 if(HAS_SDL3)
-  target_link_libraries("${SM_EXE_NAME}" SDL3::SDL3 imgui)
+  if(EMSCRIPTEN)
+    # Emscripten provides SDL3 via -sUSE_SDL=3 (already set in link/compile options).
+    # Just link imgui and set the define.
+    target_link_libraries("${SM_EXE_NAME}" imgui)
+  else()
+    target_link_libraries("${SM_EXE_NAME}" SDL3::SDL3 imgui)
+  endif()
   target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_SDL3)
 endif()
 
@@ -475,6 +511,8 @@ if(APPLE)
 
   add_dependencies("${SM_EXE_NAME}" "ffmpeg")
   list(APPEND SM_INCLUDE_DIRS "${SM_FFMPEG_INCLUDE}")
+elseif(EMSCRIPTEN)
+  # No ffmpeg, no native libs — just the source dir and generated dir.
 else()
   if(MSVC)
     list(APPEND SM_INCLUDE_DIRS "${SM_EXTERN_DIR}/ffmpeg-w32/include")
