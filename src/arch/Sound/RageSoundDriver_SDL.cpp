@@ -67,12 +67,19 @@ std::string RageSoundDriver_SDL::Init()
 		return ssprintf( "SDL_OpenAudioDeviceStream failed: %s", SDL_GetError() );
 
 	// Query the device buffer size for writeahead estimation.
+	// Keep m_iSampleRate as-is (what we requested) — SDL3 resamples
+	// from our stream rate to the device rate automatically.
 	SDL_AudioSpec got;
 	int sample_frames = 0;
 	SDL_AudioDeviceID devid = SDL_GetAudioStreamDevice( m_pStream );
 	if( SDL_GetAudioDeviceFormat(devid, &got, &sample_frames) )
 	{
-		m_iWriteahead = (sample_frames > 0) ? sample_frames : 1024;
+		// Use the device's buffer size as our writeahead estimate,
+		// scaled to our sample rate.
+		if( sample_frames > 0 && got.freq > 0 )
+			m_iWriteahead = sample_frames * m_iSampleRate / got.freq;
+		else
+			m_iWriteahead = 1024;
 	}
 	else
 	{

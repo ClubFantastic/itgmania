@@ -14,7 +14,7 @@ GAME_ROOT="${1:-.}"
 OUTPUT="${2:-gamedata-manifest.txt}"
 
 # Directories to include in the manifest
-DIRS=("Characters" "Data" "NoteSkins" "Themes")
+DIRS=("Characters" "Data" "NoteSkins" "Songs" "Themes")
 
 {
     for dir in "${DIRS[@]}"; do

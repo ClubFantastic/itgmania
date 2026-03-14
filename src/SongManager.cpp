@@ -423,6 +423,14 @@ void SongManager::LoadSongDir(
   // Find all group directories in "Songs" folder
   std::vector<std::string> arrayGroupDirs;
   GetDirListing(sDir + "*", arrayGroupDirs, true);
+#ifdef EMSCRIPTEN
+  printf("SongManager: GetDirListing('%s*') returned %d group dirs\n",
+         sDir.c_str(), (int)arrayGroupDirs.size());
+  for (unsigned d = 0; d < arrayGroupDirs.size(); d++)
+    printf("SongManager:   [%d] '%s'\n", d, arrayGroupDirs[d].c_str());
+  printf("SongManager: FileType('Songs/') = %d\n",
+         (int)FILEMAN->GetFileType("Songs/"));
+#endif
   SortRStringArray(arrayGroupDirs);
   StripCvsAndSvn(arrayGroupDirs);
   StripMacResourceForks(arrayGroupDirs);

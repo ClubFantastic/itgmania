@@ -1269,14 +1269,11 @@ void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 	if (b)
 	{
 #ifdef EMSCRIPTEN
-		/* GLES3 has no glGetTexLevelParameteriv.  Assume mipmaps are present
-		 * when filtering is requested — textures uploaded with
-		 * bGenerateMipMaps will have them, and the worst case for a
-		 * non-mipmapped texture is a slightly blurrier result. */
-		if (g_pWind->GetActualVideoModeParams().bTrilinearFiltering)
-			iMinFilter = GL_LINEAR_MIPMAP_LINEAR;
-		else
-			iMinFilter = GL_LINEAR_MIPMAP_NEAREST;
+		/* GLES3 has no glGetTexLevelParameteriv, so we can't check if mipmaps
+		 * exist.  Using mipmap filtering on a texture without mipmaps makes it
+		 * incomplete (renders black) in GLES3.  Default to GL_LINEAR which
+		 * always works.  Textures with mipmaps will just skip trilinear. */
+		iMinFilter = GL_LINEAR;
 #else
 		GLint iWidth1 = -1, iWidth2 = -1;
 		glGetTexLevelParameteriv( GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &iWidth1 );
