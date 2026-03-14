@@ -1,6 +1,6 @@
 /* RageFileDriverHTTP: Lazy HTTP file driver for Emscripten.
- * Files are fetched on demand from a web server via synchronous XHR.
- * A JSON manifest (gamedata-manifest.json) provides file listings. */
+ * Bypasses FilenameDB entirely — uses a simple in-memory manifest
+ * for directory listings and file lookups. */
 
 #ifdef EMSCRIPTEN
 
@@ -10,26 +10,11 @@
 #include "RageLog.h"
 #include "RageUtil.h"
 #include "RageUtil_FileDB.h"
-#include "JsonUtil.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <cstring>
 #include <emscripten.h>
-
-/* Custom FilenameDB that never expires and never creates empty FileSets
- * for directories that aren't in the manifest. */
-class HTTPFilenameDB: public FilenameDB
-{
-public:
-	HTTPFilenameDB() { ExpireSeconds = -1; }
-	void CacheFile( const RString & ) override { }
-	void PopulateFileSet( FileSet &fs, const RString &sPath ) override
-	{
-		/* This should never be called for paths in the manifest, since
-		 * AddFile already created the FileSets.  If it IS called, it means
-		 * GetFileSet is creating a new empty FileSet for a path that
-		 * doesn't exist in the manifest — which is fine, just leave it empty. */
-	}
-};
 
 /* ---- RageFileObjHTTP ---- */
 
@@ -38,31 +23,23 @@ RageFileObjHTTP::RageFileObjHTTP( const std::string &sURL )
 {
 }
 
-RageFileObjHTTP::~RageFileObjHTTP()
-{
-}
+RageFileObjHTTP::~RageFileObjHTTP() {}
 
 bool RageFileObjHTTP::EnsureFetched()
 {
 	if( m_bFetched )
 		return !m_bFetchFailed;
-
 	m_bFetched = true;
 
 	void *pBuf = nullptr;
-	int iSize = 0;
-	int iError = 0;
-
-	/* Synchronous HTTP GET. This blocks the main thread, which is acceptable
-	 * for a game that does synchronous file I/O everywhere. */
+	int iSize = 0, iError = 0;
 	emscripten_wget_data( m_sURL.c_str(), &pBuf, &iSize, &iError );
 
 	if( iError != 0 || pBuf == nullptr )
 	{
-		if( LOG ) LOG->Warn( "RageFileDriverHTTP: failed to fetch '%s' (error %d)", m_sURL.c_str(), iError );
+		if( LOG ) LOG->Warn( "HTTP: fetch failed '%s' (err %d)", m_sURL.c_str(), iError );
 		m_bFetchFailed = true;
-		if( pBuf )
-			free( pBuf );
+		if( pBuf ) free( pBuf );
 		return false;
 	}
 
@@ -73,13 +50,9 @@ bool RageFileObjHTTP::EnsureFetched()
 
 int RageFileObjHTTP::ReadInternal( void *pBuffer, size_t iBytes )
 {
-	if( !EnsureFetched() )
-		return -1;
-
+	if( !EnsureFetched() ) return -1;
 	int iRemain = (int)m_Data.size() - m_iFilePos;
-	if( iRemain <= 0 )
-		return 0;
-
+	if( iRemain <= 0 ) return 0;
 	int iToRead = std::min( (int)iBytes, iRemain );
 	memcpy( pBuffer, m_Data.data() + m_iFilePos, iToRead );
 	m_iFilePos += iToRead;
@@ -88,64 +61,72 @@ int RageFileObjHTTP::ReadInternal( void *pBuffer, size_t iBytes )
 
 int RageFileObjHTTP::SeekInternal( int iOffset )
 {
-	if( !EnsureFetched() )
-		return 0;
-
+	if( !EnsureFetched() ) return 0;
 	m_iFilePos = std::clamp( iOffset, 0, (int)m_Data.size() );
 	return m_iFilePos;
 }
 
 int RageFileObjHTTP::GetFileSize() const
 {
-	/* Must eagerly fetch — callers (RageFileObj::Read) use GetFileSize()
-	 * to pre-allocate buffers, and -1 would be interpreted as a huge size. */
 	const_cast<RageFileObjHTTP*>(this)->EnsureFetched();
-	if( m_bFetchFailed )
-		return 0;
-	return (int)m_Data.size();
+	return m_bFetchFailed ? 0 : (int)m_Data.size();
 }
 
 RageFileObjHTTP *RageFileObjHTTP::Copy() const
 {
-	auto *pCopy = new RageFileObjHTTP( m_sURL );
-	pCopy->m_Data = m_Data;
-	pCopy->m_iFilePos = m_iFilePos;
-	pCopy->m_bFetched = m_bFetched;
-	pCopy->m_bFetchFailed = m_bFetchFailed;
-	return pCopy;
+	auto *p = new RageFileObjHTTP( m_sURL );
+	p->m_Data = m_Data;
+	p->m_iFilePos = m_iFilePos;
+	p->m_bFetched = m_bFetched;
+	p->m_bFetchFailed = m_bFetchFailed;
+	return p;
+}
+
+/* ---- Path helpers ---- */
+
+static std::string toLower( const std::string &s )
+{
+	std::string r = s;
+	for( char &c : r )
+		if( c >= 'A' && c <= 'Z' ) c += 'a' - 'A';
+	return r;
+}
+
+/* Normalize a path: ensure leading /, lowercase, collapse slashes. */
+std::string RageFileDriverHTTP::NormPath( const RString &sPath ) const
+{
+	std::string s = sPath.c_str();
+	/* Ensure leading slash */
+	if( s.empty() || s[0] != '/' )
+		s = "/" + s;
+	/* Replace backslashes */
+	for( char &c : s )
+		if( c == '\\' ) c = '/';
+	return toLower( s );
 }
 
 /* ---- RageFileDriverHTTP ---- */
 
 RageFileDriverHTTP::RageFileDriverHTTP( const RString &sBaseURL )
-	: RageFileDriver( new HTTPFilenameDB ),
+	: RageFileDriver( new NullFilenameDB ),
 	  m_sBaseURL( sBaseURL )
 {
-	/* Ensure base URL has trailing slash */
 	if( !m_sBaseURL.empty() && m_sBaseURL.Right(1) != "/" )
 		m_sBaseURL += "/";
-
 	LoadManifest();
 }
 
 void RageFileDriverHTTP::LoadManifest()
 {
-	/* Fetch the manifest file, which is a newline-delimited list of:
-	 *   size<TAB>path
-	 * Directories are indicated by size -1. */
 	RString sManifestURL = m_sBaseURL + "gamedata-manifest.txt";
-
 	void *pBuf = nullptr;
-	int iSize = 0;
-	int iError = 0;
-
+	int iSize = 0, iError = 0;
 	emscripten_wget_data( sManifestURL.c_str(), &pBuf, &iSize, &iError );
 
 	if( iError != 0 || pBuf == nullptr )
 	{
-		if( LOG ) LOG->Warn( "RageFileDriverHTTP: failed to fetch manifest from '%s'", sManifestURL.c_str() );
-		if( pBuf )
-			free( pBuf );
+		printf( "HTTP-VFS: failed to fetch manifest from '%s'\n", sManifestURL.c_str() );
+		if( pBuf ) free( pBuf );
 		return;
 	}
 
@@ -155,67 +136,66 @@ void RageFileDriverHTTP::LoadManifest()
 	std::vector<RString> asLines;
 	split( sManifest, "\n", asLines );
 
-	for( const RString &sLine : asLines )
-	{
-		if( sLine.empty() )
-			continue;
-
-		/* Format: size\tpath */
-		size_t iTab = sLine.find( '\t' );
-		if( iTab == RString::npos )
-			continue;
-
-		int iFileSize = StringToInt( sLine.Left(iTab) );
-		RString sPath = sLine.substr( iTab + 1 );
-
-		/* Normalize path separators */
-		sPath.Replace( "\\", "/" );
-
-		/* Ensure leading slash */
-		if( sPath.empty() )
-			continue;
-		if( sPath[0] != '/' )
-			sPath = "/" + sPath;
-
-		/* Directories (size -1) need trailing slash for FilenameDB */
-		if( iFileSize == -1 )
-		{
-			if( sPath.Right(1) != "/" )
-				sPath += "/";
-		}
-
-		FDB->AddFile( sPath, iFileSize, 0, nullptr );
-	}
-
 	int iFiles = 0, iDirs = 0;
 	for( const RString &sLine : asLines )
 	{
 		if( sLine.empty() ) continue;
-		size_t t = sLine.find('\t');
-		if( t == RString::npos ) continue;
-		if( sLine.Left(t) == "-1" ) iDirs++; else iFiles++;
-	}
-	if( LOG ) LOG->Info( "RageFileDriverHTTP: loaded manifest with %d files and %d dirs from '%s'",
-		iFiles, iDirs, sManifestURL.c_str() );
+		size_t iTab = sLine.find( '\t' );
+		if( iTab == RString::npos ) continue;
 
-	/* Debug: verify key files are findable */
-	{
-		RageFileManager::FileType ft;
-		ft = FDB->GetFileType( "/Themes/_fallback/Graphics/_missing.png" );
-		printf( "HTTP-VFS: _missing.png type = %d\n", (int)ft );
-		ft = FDB->GetFileType( "/Themes/_fallback/Graphics/" );
-		printf( "HTTP-VFS: Graphics/ dir type = %d\n", (int)ft );
-		ft = FDB->GetFileType( "/Themes/" );
-		printf( "HTTP-VFS: Themes/ dir type = %d\n", (int)ft );
-		ft = FDB->GetFileType( "/Characters/default/" );
-		printf( "HTTP-VFS: Characters/default/ type = %d\n", (int)ft );
+		int iFileSize = StringToInt( sLine.Left(iTab) );
+		RString sPath = sLine.substr( iTab + 1 );
+		sPath.Replace( "\\", "/" );
 
-		std::vector<RString> listing;
-		FDB->GetDirListing( "/Themes/_fallback/Graphics/_missing*", listing, false, false );
-		printf( "HTTP-VFS: _missing* listing has %d results\n", (int)listing.size() );
-		for( size_t i = 0; i < listing.size(); i++ )
-			printf( "HTTP-VFS:   [%d] %s\n", (int)i, listing[i].c_str() );
+		bool bIsDir = (iFileSize == -1);
+
+		/* Build the normalized path with leading slash */
+		std::string sOrigPath = sPath.c_str();
+		if( sOrigPath.empty() ) continue;
+		if( sOrigPath[0] != '/' )
+			sOrigPath = "/" + sOrigPath;
+
+		std::string sNorm = toLower( sOrigPath );
+
+		/* Store in manifest */
+		if( bIsDir )
+		{
+			std::string sDirNorm = sNorm;
+			if( sDirNorm.back() != '/' ) sDirNorm += "/";
+			m_Manifest[sDirNorm] = { true, 0 };
+			iDirs++;
+		}
+		else
+		{
+			m_Manifest[sNorm] = { false, iFileSize };
+			iFiles++;
+		}
+
+		/* Add to parent's directory listing */
+		std::string sOrigWithSlash = sOrigPath;
+		if( bIsDir && sOrigWithSlash.back() != '/' )
+			sOrigWithSlash += "/";
+
+		/* Find parent dir and child name */
+		std::string sForSplit = bIsDir ?
+			sOrigPath : sOrigPath; /* use without trailing slash for splitting */
+		/* Remove trailing slash for splitting */
+		std::string sTmp = sOrigPath;
+		while( sTmp.size() > 1 && sTmp.back() == '/' )
+			sTmp.pop_back();
+		size_t iLastSlash = sTmp.rfind( '/' );
+		if( iLastSlash == std::string::npos ) continue;
+
+		std::string sParentDir = toLower( sTmp.substr( 0, iLastSlash + 1 ) );
+		std::string sChildName = sTmp.substr( iLastSlash + 1 );
+
+		m_DirContents[sParentDir].push_back( { sChildName, bIsDir } );
 	}
+
+	/* Also add the root directory */
+	m_Manifest["/"] = { true, 0 };
+
+	printf( "HTTP-VFS: loaded manifest: %d files, %d dirs\n", iFiles, iDirs );
 }
 
 RageFileBasic *RageFileDriverHTTP::Open( const RString &sPath, int iMode, int &iError )
@@ -226,27 +206,118 @@ RageFileBasic *RageFileDriverHTTP::Open( const RString &sPath, int iMode, int &i
 		return nullptr;
 	}
 
-	/* Check that the file exists in our manifest */
-	if( FDB->GetFileType(sPath) == RageFileManager::TYPE_NONE )
+	std::string sNorm = NormPath( sPath );
+
+	auto it = m_Manifest.find( sNorm );
+	if( it == m_Manifest.end() || it->second.bIsDir )
 	{
-		iError = ENOENT;
+		iError = (it != m_Manifest.end()) ? EISDIR : ENOENT;
 		return nullptr;
 	}
 
-	if( FDB->GetFileType(sPath) == RageFileManager::TYPE_DIR )
-	{
-		iError = EISDIR;
-		return nullptr;
-	}
-
-	/* Build the URL: base + path (strip leading slash since base has trailing slash) */
+	/* Build URL */
 	RString sRelPath = sPath;
 	if( !sRelPath.empty() && sRelPath[0] == '/' )
 		sRelPath = sRelPath.substr(1);
+	return new RageFileObjHTTP( m_sBaseURL + sRelPath );
+}
 
-	RString sURL = m_sBaseURL + sRelPath;
+void RageFileDriverHTTP::GetDirListing( const RString &sPath,
+	std::vector<RString> &asAddTo, bool bOnlyDirs, bool bReturnPathToo )
+{
+	/* sPath is like "/Themes/_fallback/Graphics/_missing*" or "/Songs/*" */
+	std::string s = sPath.c_str();
+	if( s.empty() ) return;
+	if( s[0] != '/' ) s = "/" + s;
 
-	return new RageFileObjHTTP( sURL );
+	/* Split into directory part and filename pattern */
+	size_t iLastSlash = s.rfind( '/' );
+	std::string sDirPart = toLower( s.substr( 0, iLastSlash + 1 ) );
+	std::string sPattern = s.substr( iLastSlash + 1 );
+
+	/* Check for wildcard */
+	size_t iStar = sPattern.find( '*' );
+
+	auto dirIt = m_DirContents.find( sDirPart );
+	if( dirIt == m_DirContents.end() )
+		return;
+
+	std::string sPatLower = toLower( sPattern );
+
+	for( auto &entry : dirIt->second )
+	{
+		const std::string &sName = entry.first;
+		bool bIsDir = entry.second;
+
+		if( bOnlyDirs && !bIsDir )
+			continue;
+
+		/* Match against pattern */
+		std::string sNameLower = toLower( sName );
+
+		if( iStar == std::string::npos )
+		{
+			/* Exact match */
+			if( sNameLower != sPatLower )
+				continue;
+		}
+		else
+		{
+			/* Wildcard: "prefix*suffix" */
+			std::string sPrefix = toLower( sPattern.substr( 0, iStar ) );
+			std::string sSuffix = toLower( sPattern.substr( iStar + 1 ) );
+
+			if( !sPrefix.empty() && sNameLower.substr( 0, sPrefix.size() ) != sPrefix )
+				continue;
+			if( !sSuffix.empty() )
+			{
+				if( sNameLower.size() < sSuffix.size() )
+					continue;
+				if( sNameLower.substr( sNameLower.size() - sSuffix.size() ) != sSuffix )
+					continue;
+			}
+		}
+
+		if( bReturnPathToo )
+		{
+			/* Reconstruct the directory part from the original path (preserve case) */
+			std::string sOrigDir = s.substr( 0, iLastSlash + 1 );
+			asAddTo.push_back( sOrigDir + sName + (bIsDir ? "/" : "") );
+		}
+		else
+		{
+			asAddTo.push_back( sName + (bIsDir ? "/" : "") );
+		}
+	}
+}
+
+RageFileManager::FileType RageFileDriverHTTP::GetFileType( const RString &sPath )
+{
+	std::string sNorm = NormPath( sPath );
+
+	/* Try as file first */
+	auto it = m_Manifest.find( sNorm );
+	if( it != m_Manifest.end() )
+		return it->second.bIsDir ? RageFileManager::TYPE_DIR : RageFileManager::TYPE_FILE;
+
+	/* Try with trailing slash (directory) */
+	if( sNorm.back() != '/' )
+	{
+		it = m_Manifest.find( sNorm + "/" );
+		if( it != m_Manifest.end() )
+			return RageFileManager::TYPE_DIR;
+	}
+
+	return RageFileManager::TYPE_NONE;
+}
+
+int RageFileDriverHTTP::GetFileSizeInBytes( const RString &sFilePath )
+{
+	std::string sNorm = NormPath( sFilePath );
+	auto it = m_Manifest.find( sNorm );
+	if( it == m_Manifest.end() || it->second.bIsDir )
+		return -1;
+	return it->second.iSize;
 }
 
 /* Register driver type "HTTP" */

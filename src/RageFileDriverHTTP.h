@@ -1,6 +1,6 @@
 /* RageFileDriverHTTP: Lazy HTTP file driver for Emscripten.
  * Files are fetched on demand from a web server using synchronous XHR.
- * A JSON manifest provides the directory structure. */
+ * A text manifest provides the directory structure. */
 
 #ifndef RAGE_FILE_DRIVER_HTTP_H
 #define RAGE_FILE_DRIVER_HTTP_H
@@ -11,6 +11,8 @@
 #include "RageFileBasic.h"
 
 #include <cstddef>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -21,7 +23,7 @@ public:
 	~RageFileObjHTTP();
 
 	int ReadInternal( void *pBuffer, size_t iBytes );
-	int WriteInternal( const void * /*pBuffer*/, size_t /*iBytes*/ ) { return -1; }
+	int WriteInternal( const void *, size_t ) { return -1; }
 	int FlushInternal() { return 0; }
 	int SeekInternal( int iOffset );
 	int GetFileSize() const;
@@ -38,20 +40,37 @@ private:
 	bool m_bFetchFailed;
 };
 
+/* Entry in the manifest: either a file (with size) or a directory. */
+struct HTTPFileEntry
+{
+	bool bIsDir;
+	int iSize;
+};
+
 class RageFileDriverHTTP: public RageFileDriver
 {
 public:
 	RageFileDriverHTTP( const RString &sBaseURL );
 
 	RageFileBasic *Open( const RString &sPath, int iMode, int &iError );
-	void FlushDirCache( const RString &sPath ) override {
-		printf("HTTP-VFS: FlushDirCache('%s') BLOCKED\n", sPath.c_str());
-	}
+	void GetDirListing( const RString &sPath, std::vector<RString> &asAddTo,
+	                    bool bOnlyDirs, bool bReturnPathToo );
+	RageFileManager::FileType GetFileType( const RString &sPath );
+	int GetFileSizeInBytes( const RString &sFilePath );
+	void FlushDirCache( const RString & ) override { }
 
 private:
 	RString m_sBaseURL;
 
+	/* Simple manifest: map from lowercase path -> entry.
+	 * Directories stored WITH trailing slash. Files WITHOUT. */
+	std::map<std::string, HTTPFileEntry> m_Manifest;
+
+	/* Directory contents cache: lowercase dir path -> set of child names (original case). */
+	std::map<std::string, std::vector<std::pair<std::string,bool>>> m_DirContents;
+
 	void LoadManifest();
+	std::string NormPath( const RString &sPath ) const;
 };
 
 #endif // EMSCRIPTEN

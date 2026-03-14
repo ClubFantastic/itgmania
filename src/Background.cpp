@@ -425,7 +425,13 @@ bool BackgroundImpl::Layer::CreateBackground(
       break;
     }
   }
-  ASSERT(!sEffectFile.empty());
+  if (sEffectFile.empty()) {
+    /* Effect file not found - use a blank actor instead of crashing. */
+    m_BGAnimations[bd] = new Actor;
+    for (unsigned i = 0; i < vsResolvedRef.size(); i++)
+      delete vsResolvedRef[i];
+    return true;
+  }
 
   Actor* pActor = ActorUtil::MakeActor(sEffectFile);
 
