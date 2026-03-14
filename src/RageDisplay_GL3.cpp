@@ -414,9 +414,17 @@ public:
 			glBufferSubData( GL_ARRAY_BUFFER, meshInfo.iVertexStart * sizeof(RageVector2),
 				meshInfo.iVertexCount * sizeof(RageVector2), texMatScale.data() );
 
+			// Remap triangle indices: mesh-local vertex indices must be offset
+			// by iVertexStart to reference the correct position in the global VBO.
+			std::vector<msTriangle> remappedTris( mesh.Triangles.size() );
+			for (size_t j = 0; j < mesh.Triangles.size(); ++j)
+				for (int k = 0; k < 3; ++k)
+					remappedTris[j].nVertexIndices[k] = static_cast<uint16_t>(
+						meshInfo.iVertexStart + mesh.Triangles[j].nVertexIndices[k] );
+
 			glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, m_IBO );
 			glBufferSubData( GL_ELEMENT_ARRAY_BUFFER, meshInfo.iTriangleStart * sizeof(msTriangle),
-				meshInfo.iTriangleCount * sizeof(msTriangle), mesh.Triangles.data() );
+				meshInfo.iTriangleCount * sizeof(msTriangle), remappedTris.data() );
 		}
 	}
 
