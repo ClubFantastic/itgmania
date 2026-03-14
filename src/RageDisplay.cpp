@@ -836,6 +836,9 @@ void RageDisplay::DrawCircle(const RageSpriteVertex& v, float radius) {
 }
 
 void RageDisplay::FrameLimitBeforeVsync(int iFPS) {
+#ifdef EMSCRIPTEN
+  return;  // Browser handles vsync via requestAnimationFrame
+#endif
   ASSERT(iFPS != 0);
 
   int iDelayMicroseconds = 0;

@@ -95,8 +95,13 @@ namespace ImGuiManager
 
 		ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
 #if defined(HAS_GL3)
+#ifdef EMSCRIPTEN
+		ImGui_ImplOpenGL3_Init("#version 300 es");
+		LOG->Info("ImGuiManager: initialized (OpenGL ES 3.0 backend)");
+#else
 		ImGui_ImplOpenGL3_Init("#version 330 core");
 		LOG->Info("ImGuiManager: initialized (OpenGL 3.3 backend)");
+#endif
 #else
 		ImGui_ImplOpenGL2_Init();
 		LOG->Info("ImGuiManager: initialized (OpenGL 2 backend)");
