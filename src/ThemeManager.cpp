@@ -627,10 +627,14 @@ bool ThemeManager::GetPathInfoToRaw(
           // use
   {
     std::vector<std::string> asPaths;
-    GetDirListing(
+    std::string sSearchPath =
         sThemeDir + sCategory + "/" +
-            MetricsGroupAndElementToFileName(sMetricsGroup, sElement) + "*",
-        asPaths, false, true);
+        MetricsGroupAndElementToFileName(sMetricsGroup, sElement) + "*";
+    GetDirListing(sSearchPath, asPaths, false, true);
+#ifdef EMSCRIPTEN
+    if (asPaths.empty())
+      printf("THEME-SEARCH: '%s' -> 0 results\n", sSearchPath.c_str());
+#endif
 
     for (unsigned p = 0; p < asPaths.size(); ++p) {
       // BGAnimations, Fonts, Graphics, Sounds, Other

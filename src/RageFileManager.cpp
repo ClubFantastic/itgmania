@@ -451,6 +451,18 @@ RageFileManager::RageFileManager(const std::string& argv0) {
 
 void RageFileManager::MountInitialFilesystems() {
   HOOKS->MountInitialFilesystems(RageFileManagerUtil::sDirOfExecutable);
+#ifdef EMSCRIPTEN
+  {
+    g_Mutex->Lock();
+    printf("FM: %d drivers mounted after MountInitialFilesystems:\n",
+           (int)g_pDrivers.size());
+    for (unsigned i = 0; i < g_pDrivers.size(); i++)
+      printf("FM:   [%d] type='%s' root='%s' mount='%s'\n", i,
+             g_pDrivers[i]->m_sType.c_str(), g_pDrivers[i]->m_sRoot.c_str(),
+             g_pDrivers[i]->m_sMountPoint.c_str());
+    g_Mutex->Unlock();
+  }
+#endif
 }
 
 void RageFileManager::MountUserFilesystems() {
@@ -529,6 +541,26 @@ void RageFileManager::GetDirListing(
 
     pLoadedDriver->m_pDriver->GetDirListing(
         p, AddTo, bOnlyDirs, bReturnPathToo);
+#ifdef EMSCRIPTEN
+    if (sPath.find("_missing") != std::string::npos &&
+        sPath.find("_fallback") != std::string::npos) {
+      static bool bDumpedAll = false;
+      if (!bDumpedAll) {
+        bDumpedAll = true;
+        printf("FM: %d total drivers at _missing search time:\n",
+               (int)apDriverList.size());
+        for (unsigned j = 0; j < apDriverList.size(); j++) {
+          const std::string pj = apDriverList[j]->GetPath(sPath);
+          printf("FM:   [%d] type='%s' mount='%s' getpath='%s'\n", j,
+                 apDriverList[j]->m_sType.c_str(),
+                 apDriverList[j]->m_sMountPoint.c_str(), pj.c_str());
+        }
+      }
+      printf("FM-DirList: driver[%d] type='%s' path='%s' got %d results\n", i,
+             pLoadedDriver->m_sType.c_str(), p.c_str(),
+             (int)(AddTo.size() - OldStart));
+    }
+#endif
     if (AddTo.size() != OldStart) {
       ++iDriversThatReturnedFiles;
     }
