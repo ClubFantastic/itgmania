@@ -406,6 +406,16 @@ struct VideoCardDefaults {
 } const g_VideoCardDefaults[] = {
     // These lines correspond to the struct defined above.
     VideoCardDefaults(
+        "OpenGL ES",  // Video card name (Emscripten/WebGL)
+        "gl3",        // Available renderers
+        1280, 720,    // Default resolution
+        32,           // Display color
+        32,           // Texture color
+        32,           // Movie color
+        2048,         // Texture size
+        true          // Smooth lines
+        ),
+    VideoCardDefaults(
         "OpenGL",   // Video card name (generic Mac/Linux)
         "opengl",   // Available renderers
         1280, 720,  // Default resolution
@@ -430,6 +440,8 @@ struct VideoCardDefaults {
 static std::string GetVideoDriverName() {
 #if defined(_WIN32)
   return GetPrimaryVideoDriverName();
+#elif defined(EMSCRIPTEN)
+  return "OpenGL ES";
 #else
   return "OpenGL";
 #endif

@@ -270,7 +270,7 @@ elseif(EMSCRIPTEN)
     -sNO_EXIT_RUNTIME=1
     -sASSERTIONS=2
     -sSTACK_SIZE=1048576
-    -sPTHREAD_POOL_SIZE=4
+    -sPTHREAD_POOL_SIZE=8
     -pthread
     -g
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/emscripten_shell.html

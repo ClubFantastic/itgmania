@@ -655,16 +655,28 @@ std::string RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccele
 
 	// Check for minimum GL version support
 	GLint major = 0, minor = 0;
-	glGetIntegerv( GL_MAJOR_VERSION, &major );
-	glGetIntegerv( GL_MINOR_VERSION, &minor );
 #ifdef EMSCRIPTEN
-	// WebGL2 / GLES3: require OpenGL ES 3.0+
+	// GL_MAJOR_VERSION/GL_MINOR_VERSION may not work on WebGL2/GLES3.
+	// Parse from GL_VERSION string instead ("OpenGL ES 3.0 ..." or "WebGL 2.0 ...").
+	{
+		const char *ver = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+		if (ver) {
+			// Try "OpenGL ES X.Y" first, then "WebGL X.Y"
+			if (sscanf(ver, "OpenGL ES %d.%d", &major, &minor) != 2)
+				sscanf(ver, "WebGL %d.%d", &major, &minor);
+			// WebGL 2.0 == GLES 3.0
+			if (major == 2 && strstr(ver, "WebGL") != nullptr)
+				major = 3;
+		}
+	}
 	if (major < 3)
 	{
 		return ssprintf( "OpenGL ES 3.0 required but only %d.%d available. %s",
 			major, minor, OBTAIN_AN_UPDATED_VIDEO_DRIVER_GL3.GetValue().c_str() );
 	}
 #else
+	glGetIntegerv( GL_MAJOR_VERSION, &major );
+	glGetIntegerv( GL_MINOR_VERSION, &minor );
 	if (major < 3 || (major == 3 && minor < 3))
 	{
 		return ssprintf( "OpenGL 3.3 required but only %d.%d available. %s",

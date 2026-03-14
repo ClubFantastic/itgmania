@@ -37,6 +37,23 @@ CharacterManager::CharacterManager() {
   StripCvsAndSvn(as);
   StripMacResourceForks(as);
 
+#ifdef EMSCRIPTEN
+  printf("CharacterManager: GetDirListing('Characters/*') returned %d entries\n",
+         (int)as.size());
+  {
+    std::vector<std::string> test;
+    FILEMAN->GetDirListing("Characters/*", test, true, true);
+    printf("CharacterManager: FILEMAN->GetDirListing('Characters/*') returned %d entries\n",
+           (int)test.size());
+    for (unsigned d = 0; d < test.size(); d++)
+      printf("CharacterManager:   [%d] '%s'\n", d, test[d].c_str());
+
+    printf("CharacterManager: FileType('Characters/') = %d\n",
+           (int)FILEMAN->GetFileType("Characters/"));
+    printf("CharacterManager: FileType('Characters/default/') = %d\n",
+           (int)FILEMAN->GetFileType("Characters/default/"));
+  }
+#endif
   bool FoundDefault = false;
   for (unsigned i = 0; i < as.size(); i++) {
     std::string sCharName, sDummy;
@@ -55,9 +72,11 @@ CharacterManager::CharacterManager() {
     }
   }
 
+#ifndef EMSCRIPTEN
   if (!FoundDefault) {
     RageException::Throw("'Characters/default' is missing.");
   }
+#endif
 
   // If FoundDefault, then we're not empty. -Chris
   //	if( m_pCharacters.empty() )
