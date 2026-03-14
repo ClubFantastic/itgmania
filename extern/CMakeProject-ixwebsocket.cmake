@@ -100,6 +100,10 @@ set_property(TARGET "ixwebsocket" PROPERTY CXX_EXTENSIONS OFF)
 
 disable_project_warnings("ixwebsocket")
 
+if(EMSCRIPTEN)
+  target_compile_definitions("ixwebsocket" PRIVATE PLATFORM_NAME="emscripten")
+endif()
+
 target_compile_definitions("ixwebsocket" PRIVATE IXWEBSOCKET_USE_TLS)
 target_compile_definitions("ixwebsocket" PRIVATE IXWEBSOCKET_USE_MBED_TLS)
 target_compile_definitions("ixwebsocket" PRIVATE IXWEBSOCKET_USE_MBED_TLS_MIN_VERSION_3)

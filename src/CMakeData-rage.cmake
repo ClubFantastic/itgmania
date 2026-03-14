@@ -59,8 +59,14 @@ list(APPEND SMDATA_RAGE_GRAPHICS_SRC
             "RageBitmapTexture.cpp"
             "RageDisplay.cpp"
             "RageDisplay_Null.cpp"
-            "RageDisplay_OGL.cpp"
             "RageDisplay_OGL_Helpers.cpp"
+)
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_RAGE_GRAPHICS_SRC
+            "RageDisplay_OGL.cpp"
+  )
+endif()
+list(APPEND SMDATA_RAGE_GRAPHICS_SRC
             "RageModelGeometry.cpp"
             "RageSurface.cpp"
             "RageSurface_Load.cpp"
@@ -86,8 +92,14 @@ list(APPEND SMDATA_RAGE_GRAPHICS_HPP
             "RageBitmapTexture.h"
             "RageDisplay.h"
             "RageDisplay_Null.h"
+)
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_RAGE_GRAPHICS_HPP
             "RageDisplay_OGL.h"
             "RageDisplay_OGL_Helpers.h"
+  )
+endif()
+list(APPEND SMDATA_RAGE_GRAPHICS_HPP
             "RageModelGeometry.h"
             "RageSurface.h"
             "RageSurface_Load.h"

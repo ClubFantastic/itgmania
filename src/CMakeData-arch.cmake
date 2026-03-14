@@ -194,28 +194,31 @@ source_group("Arch Specific\\\\Loading Window"
 list(APPEND SMDATA_ARCH_LIGHTS_SRC "arch/Lights/LightsDriver.cpp"
             "arch/Lights/LightsDriver_Export.cpp"
             "arch/Lights/LightsDriver_SextetStream.cpp"
-            "arch/Lights/LightsDriver_SystemMessage.cpp"
-            "arch/Lights/LightsDriver_stac.cpp"
-            "arch/Lights/LightsDriver_stac2.cpp"
-            "arch/Lights/LightsDriver_snek.cpp"
-            "arch/Lights/LightsDriver_fusion.cpp"
-            "arch/Lights/LightsDriver_MinimaidHID.cpp"
-            "arch/Lights/LightsDriver_PacDrive.cpp"
-            "arch/Lights/LightsDriver_gpb.cpp"
-            "arch/Lights/LightsDriver_HidBlueDot.cpp")
+            "arch/Lights/LightsDriver_SystemMessage.cpp")
 list(APPEND SMDATA_ARCH_LIGHTS_HPP "arch/Lights/LightsDriver.h"
             "arch/Lights/LightsDriver_Export.h"
             "arch/Lights/LightsDriver_SextetStream.h"
             "arch/Lights/LightsDriver_SystemMessage.h"
-            "arch/Lights/SextetUtils.h"
-            "arch/Lights/LightsDriver_stac.h"
-            "arch/Lights/LightsDriver_stac2.h"
-            "arch/Lights/LightsDriver_snek.h"
-            "arch/Lights/LightsDriver_fusion.h"
-            "arch/Lights/LightsDriver_MinimaidHID.cpp"
-            "arch/Lights/LightsDriver_PacDrive.h"
-            "arch/Lights/LightsDriver_gpb.h"
-            "arch/Lights/LightsDriver_HidBlueDot.h")
+            "arch/Lights/SextetUtils.h")
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_ARCH_LIGHTS_SRC
+              "arch/Lights/LightsDriver_stac.cpp"
+              "arch/Lights/LightsDriver_stac2.cpp"
+              "arch/Lights/LightsDriver_snek.cpp"
+              "arch/Lights/LightsDriver_fusion.cpp"
+              "arch/Lights/LightsDriver_MinimaidHID.cpp"
+              "arch/Lights/LightsDriver_PacDrive.cpp"
+              "arch/Lights/LightsDriver_gpb.cpp"
+              "arch/Lights/LightsDriver_HidBlueDot.cpp")
+  list(APPEND SMDATA_ARCH_LIGHTS_HPP
+              "arch/Lights/LightsDriver_stac.h"
+              "arch/Lights/LightsDriver_stac2.h"
+              "arch/Lights/LightsDriver_snek.h"
+              "arch/Lights/LightsDriver_fusion.h"
+              "arch/Lights/LightsDriver_PacDrive.h"
+              "arch/Lights/LightsDriver_gpb.h"
+              "arch/Lights/LightsDriver_HidBlueDot.h")
+endif()
 
 # TODO: Confirm if Apple can use the export.
 if(NOT APPLE)

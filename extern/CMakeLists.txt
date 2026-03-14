@@ -1,6 +1,8 @@
-include(CMakeProject-hidapi.cmake)
+if(NOT EMSCRIPTEN)
+  include(CMakeProject-hidapi.cmake)
+  include(CMakeProject-glew.cmake)
+endif()
 include(CMakeProject-lua.cmake)
-include(CMakeProject-glew.cmake)
 include(CMakeProject-json.cmake)
 include(CMakeProject-mad.cmake)
 include(CMakeProject-zlib.cmake)
@@ -20,4 +22,6 @@ if(HAS_SDL3)
 endif()
 
 # External projects
-include(CMakeProject-libusb.cmake)
+if(NOT EMSCRIPTEN)
+  include(CMakeProject-libusb.cmake)
+endif()

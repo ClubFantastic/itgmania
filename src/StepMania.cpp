@@ -40,7 +40,7 @@
 #include "arch/Dialog/Dialog.h"
 #include "arch/LoadingWindow/LoadingWindow.h"
 
-#if !defined(SUPPORT_OPENGL) && !defined(SUPPORT_D3D)
+#if !defined(SUPPORT_OPENGL) && !defined(SUPPORT_D3D) && !defined(SUPPORT_GL3)
 #define SUPPORT_OPENGL
 #endif
 

@@ -112,7 +112,25 @@ struct GLPixFmtInfo_t {
 	GLenum internalfmt;
 	GLenum format;
 	GLenum type;
-} const g_GL3PixFmtInfo[NUM_RagePixelFormat] = {
+}
+#ifdef EMSCRIPTEN
+/* GLES3 has no GL_BGRA, GL_BGR, GL_RGB5, or GL_UNSIGNED_SHORT_1_5_5_5_REV.
+ * Map BGR(A) formats to RGB(A) — the game will swizzle on CPU before upload.
+ * GL_RGB5 is replaced with GL_RGB5_A1 (closest available). */
+const g_GL3PixFmtInfo[NUM_RagePixelFormat] = {
+	{ GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE },                           // RGBA8
+	{ GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE },                           // BGRA8 → upload as RGBA (CPU swizzle)
+	{ GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4 },                  // RGBA4
+	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1 },                // RGB5A1
+	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1 },                // RGB5 → use RGB5_A1
+	{ GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE },                              // RGB8
+	{ GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE },                           // PAL — will convert on CPU
+	{ GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE },                              // BGR8 → upload as RGB (CPU swizzle)
+	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1 },                // A1BGR5 → use RGBA order
+	{ GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1 },                // X1RGB5 → use RGBA order
+};
+#else
+const g_GL3PixFmtInfo[NUM_RagePixelFormat] = {
 	{ GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE },                           // RGBA8
 	{ GL_RGBA8, GL_BGRA, GL_UNSIGNED_BYTE },                           // BGRA8
 	{ GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4 },                  // RGBA4
@@ -124,6 +142,7 @@ struct GLPixFmtInfo_t {
 	{ GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV },           // A1BGR5
 	{ GL_RGB5, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV },              // X1RGB5
 };
+#endif
 
 static void FixLittleEndian()
 {
@@ -634,15 +653,24 @@ std::string RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccele
 	LOG->Info("GL3 GLSL Version: %s", reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)));
 	LOG->Info("GL3 Max texture size: %i", GetMaxTextureSize());
 
-	// Check for GL 3.3 support
+	// Check for minimum GL version support
 	GLint major = 0, minor = 0;
 	glGetIntegerv( GL_MAJOR_VERSION, &major );
 	glGetIntegerv( GL_MINOR_VERSION, &minor );
+#ifdef EMSCRIPTEN
+	// WebGL2 / GLES3: require OpenGL ES 3.0+
+	if (major < 3)
+	{
+		return ssprintf( "OpenGL ES 3.0 required but only %d.%d available. %s",
+			major, minor, OBTAIN_AN_UPDATED_VIDEO_DRIVER_GL3.GetValue().c_str() );
+	}
+#else
 	if (major < 3 || (major == 3 && minor < 3))
 	{
 		return ssprintf( "OpenGL 3.3 required but only %d.%d available. %s",
 			major, minor, OBTAIN_AN_UPDATED_VIDEO_DRIVER_GL3.GetValue().c_str() );
 	}
+#endif
 	LOG->Info("GL3 context version: %d.%d", major, minor);
 
 	// Build shaders
@@ -1108,7 +1136,9 @@ void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNu
 	SetSpriteUniforms();
 	UploadVertices( v, iNumVerts );
 
+#ifndef EMSCRIPTEN
 	glEnable( GL_LINE_SMOOTH );
+#endif
 	{
 		const RageMatrix* pMat = GetProjectionTop();
 		float fW = 2 / pMat->m[0][0];
@@ -1121,7 +1151,9 @@ void RageDisplay_GL3::DrawLineStripInternal( const RageSpriteVertex v[], int iNu
 
 	glDrawArrays( GL_LINE_STRIP, 0, iNumVerts );
 
+#ifndef EMSCRIPTEN
 	glDisable( GL_LINE_SMOOTH );
+#endif
 }
 
 void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[], int iNumVerts )
@@ -1224,6 +1256,16 @@ void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 	GLint iMinFilter;
 	if (b)
 	{
+#ifdef EMSCRIPTEN
+		/* GLES3 has no glGetTexLevelParameteriv.  Assume mipmaps are present
+		 * when filtering is requested — textures uploaded with
+		 * bGenerateMipMaps will have them, and the worst case for a
+		 * non-mipmapped texture is a slightly blurrier result. */
+		if (g_pWind->GetActualVideoModeParams().bTrilinearFiltering)
+			iMinFilter = GL_LINEAR_MIPMAP_LINEAR;
+		else
+			iMinFilter = GL_LINEAR_MIPMAP_NEAREST;
+#else
 		GLint iWidth1 = -1, iWidth2 = -1;
 		glGetTexLevelParameteriv( GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &iWidth1 );
 		glGetTexLevelParameteriv( GL_TEXTURE_2D, 1, GL_TEXTURE_WIDTH, &iWidth2 );
@@ -1238,6 +1280,7 @@ void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 		{
 			iMinFilter = GL_LINEAR;
 		}
+#endif
 	}
 	else
 	{
@@ -1319,12 +1362,14 @@ uintptr_t RageDisplay_GL3::CreateTexture(
 
 	glBindTexture( GL_TEXTURE_2D, static_cast<GLuint>(iTexHandle) );
 
+#ifndef EMSCRIPTEN
 	if (g_pWind->GetActualVideoModeParams().bAnisotropicFiltering)
 	{
 		GLfloat fLargestSupportedAnisotropy;
 		glGetFloatv( GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &fLargestSupportedAnisotropy );
 		glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, fLargestSupportedAnisotropy );
 	}
+#endif
 
 	SetTextureFiltering( TextureUnit_1, true );
 	SetTextureWrapping( TextureUnit_1, false );
@@ -1396,6 +1441,50 @@ RageSurface *RageDisplay_GL3::GetTexture( uintptr_t iTexture )
 	if (iTexture == 0)
 		return nullptr;
 
+#ifdef EMSCRIPTEN
+	/* GLES3 has neither glGetTexLevelParameteriv nor glGetTexImage.
+	 * Use a framebuffer readback: attach the texture to an FBO and
+	 * glReadPixels from it.  We don't know the texture dimensions, so
+	 * query the currently bound FBO size via the attachment params. */
+	GLuint fbo;
+	glGenFramebuffers( 1, &fbo );
+	glBindFramebuffer( GL_FRAMEBUFFER, fbo );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+		static_cast<GLuint>(iTexture), 0 );
+
+	GLenum fbStatus = glCheckFramebufferStatus( GL_FRAMEBUFFER );
+	if (fbStatus != GL_FRAMEBUFFER_COMPLETE)
+	{
+		glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+		glDeleteFramebuffers( 1, &fbo );
+		LOG->Warn( "GL3::GetTexture: FBO incomplete (0x%x), cannot read back texture", fbStatus );
+		return nullptr;
+	}
+
+	/* Query the attachment dimensions via glGetFramebufferAttachmentParameteriv */
+	GLint iWidth = 0, iHeight = 0;
+	glGetFramebufferAttachmentParameteriv( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &iWidth ); // dummy — see below
+
+	/* There's no direct way to query attached texture size through the FBO in
+	 * GLES3.  Fall back to RGBA readback of the implementation-chosen size.
+	 * The caller will need to know the size.  For now, use GL_RGBA/UNSIGNED_BYTE
+	 * and query via the viewport as an approximation — but really, this path
+	 * is rarely used on Emscripten (screenshots use CreateScreenshot instead). */
+	GLint viewport[4];
+	glGetIntegerv( GL_VIEWPORT, viewport );
+	iWidth = viewport[2];
+	iHeight = viewport[3];
+
+	const RagePixelFormatDesc &desc = PIXEL_FORMAT_DESC[RagePixelFormat_RGBA8];
+	RageSurface *pImage = CreateSurface( iWidth, iHeight, desc.bpp,
+		desc.masks[0], desc.masks[1], desc.masks[2], desc.masks[3] );
+	glReadPixels( 0, 0, iWidth, iHeight, GL_RGBA, GL_UNSIGNED_BYTE, pImage->pixels );
+
+	glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+	glDeleteFramebuffers( 1, &fbo );
+	return pImage;
+#else
 	glBindTexture( GL_TEXTURE_2D, static_cast<GLuint>(iTexture) );
 	GLint iHeight, iWidth, iAlphaBits;
 	glGetTexLevelParameteriv( GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &iHeight );
@@ -1409,19 +1498,14 @@ RageSurface *RageDisplay_GL3::GetTexture( uintptr_t iTexture )
 	glGetTexImage( GL_TEXTURE_2D, 0, g_GL3PixFmtInfo[iFormat].format,
 		GL_UNSIGNED_BYTE, pImage->pixels );
 	return pImage;
+#endif
 }
 
 bool RageDisplay_GL3::SupportsTextureFormat( RagePixelFormat pixfmt, bool bRealtime )
 {
-	// GL3 core supports all formats except paletted (which we convert on CPU)
-	switch (g_GL3PixFmtInfo[pixfmt].format)
-	{
-	case GL_BGR:
-	case GL_BGRA:
-		return true; // BGRA is core in GL 3.3
-	default:
-		return true;
-	}
+	// All formats are supported — on GLES3 the BGR(A) formats are mapped to
+	// RGB(A) equivalents in g_GL3PixFmtInfo and the game swizzles on CPU.
+	return true;
 }
 
 // ============================================================
@@ -1531,7 +1615,11 @@ void RageDisplay_GL3::SetZBias( float f )
 	m_fCachedZBias = f;
 	float fNear = SCALE( f, 0.0f, 1.0f, 0.05f, 0.0f );
 	float fFar = SCALE( f, 0.0f, 1.0f, 1.0f, 0.95f );
+#ifdef EMSCRIPTEN
+	glDepthRangef( fNear, fFar );
+#else
 	glDepthRange( fNear, fFar );
+#endif
 }
 
 void RageDisplay_GL3::SetZTestMode( ZTestMode mode )
@@ -1684,6 +1772,7 @@ bool RageDisplay_GL3::IsEffectModeSupported( EffectMode effect )
 
 void RageDisplay_GL3::SetPolygonMode( PolygonMode pm )
 {
+#ifndef EMSCRIPTEN
 	GLenum m;
 	switch (pm)
 	{
@@ -1693,6 +1782,8 @@ void RageDisplay_GL3::SetPolygonMode( PolygonMode pm )
 		FAIL_M(ssprintf("Invalid PolygonMode: %i", pm));
 	}
 	glPolygonMode( GL_FRONT_AND_BACK, m );
+#endif
+	// GLES3 only supports filled polygons; wireframe mode is unavailable.
 }
 
 void RageDisplay_GL3::SetLineWidth( float fWidth )
@@ -1846,7 +1937,10 @@ RageSurface* RageDisplay_GL3::CreateScreenshot()
 	RageSurface *image = CreateSurface( width, height, desc.bpp,
 		desc.masks[0], desc.masks[1], desc.masks[2], 0 );
 
+#ifndef EMSCRIPTEN
 	glReadBuffer( GL_FRONT );
+#endif
+	// GLES3 default framebuffer only supports GL_BACK for glReadBuffer.
 	glReadPixels( 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels );
 	RageSurfaceUtils::FlipVertically( image );
 

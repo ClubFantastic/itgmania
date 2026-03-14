@@ -15,6 +15,25 @@ if(APPLE)
   )
 endif()
 
+if(CMAKE_TOOLCHAIN_FILE)
+  LIST(APPEND ARCH_FLAGS
+    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+  )
+endif()
+
+if(CMAKE_C_COMPILER)
+  LIST(APPEND ARCH_FLAGS
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+  )
+endif()
+
+if(EMSCRIPTEN)
+  LIST(APPEND ARCH_FLAGS
+    -DWITH_SIMD=OFF
+    -DCMAKE_SYSTEM_NAME=Emscripten
+  )
+endif()
+
 include(ExternalProject)
 ExternalProject_Add(
   libjpeg_turbo_project

@@ -1,5 +1,7 @@
-list(APPEND SMDATA_OS_SRC "archutils/Common/HidDevice.cpp")
-list(APPEND SMDATA_OS_HPP "archutils/Common/HidDevice.h")
+if(NOT EMSCRIPTEN)
+  list(APPEND SMDATA_OS_SRC "archutils/Common/HidDevice.cpp")
+  list(APPEND SMDATA_OS_HPP "archutils/Common/HidDevice.h")
+endif()
 
 if(APPLE)
   list(APPEND SMDATA_OS_DARWIN_SRC
@@ -92,7 +94,9 @@ else()
                 "archutils/Win32/WindowsResources.h")
   elseif(EMSCRIPTEN)
     # Emscripten: minimal archutils, no signals/crash handler/valgrind
-    list(APPEND SMDATA_OS_HPP "archutils/Unix/arch_setup.h")
+    list(APPEND SMDATA_OS_SRC "archutils/Unix/SpecialDirs.cpp")
+    list(APPEND SMDATA_OS_HPP "archutils/Unix/arch_setup.h"
+                              "archutils/Unix/SpecialDirs.h")
     if(HAS_PTHREAD)
       list(APPEND SMDATA_OS_SRC "archutils/Common/PthreadHelpers.cpp")
       list(APPEND SMDATA_OS_HPP "archutils/Common/PthreadHelpers.h")

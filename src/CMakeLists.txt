@@ -126,7 +126,7 @@ target_compile_options("${SM_EXE_NAME}" PRIVATE
 
 set(SM_COMPILE_FLAGS "")
 
-if(WITH_SSE2)
+if(WITH_SSE2 AND NOT EMSCRIPTEN)
   if(MSVC)
     if(SM_WIN32_ARCH MATCHES "x86")
       set(SM_COMPILE_FLAGS "${SM_COMPILE_FLAGS} /arch:SSE2")

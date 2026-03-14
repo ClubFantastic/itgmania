@@ -3,10 +3,12 @@
 #include "PthreadHelpers.h"
 
 #include "RageUtil.h"
-#include "archutils/Unix/Backtrace.h"  // HACK: This should be platform-agnosticized
 #include "global.h"
+#if !defined(EMSCRIPTEN)
+#include "archutils/Unix/Backtrace.h"  // HACK: This should be platform-agnosticized
+#endif
 
-#if defined(UNIX)
+#if defined(UNIX) && !defined(EMSCRIPTEN)
 #include "archutils/Unix/RunningUnderValgrind.h"
 #endif
 
@@ -257,6 +259,21 @@ bool GetThreadBacktraceContext(uint64_t ThreadID, BacktraceContext* ctx) {
   return true;
 }
 #endif
+
+#elif defined(EMSCRIPTEN)
+#include <pthread.h>
+
+std::string ThreadsVersion() { return "Emscripten pthreads"; }
+
+uint64_t GetCurrentThreadId() { return uint64_t(pthread_self()); }
+
+int SuspendThread(uint64_t id) {
+  return -1;  // Not supported in Emscripten
+}
+
+int ResumeThread(uint64_t id) {
+  return -1;  // Not supported in Emscripten
+}
 
 #elif defined(UNIX)
 #include <pthread.h>

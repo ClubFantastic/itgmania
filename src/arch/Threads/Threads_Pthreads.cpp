@@ -122,8 +122,9 @@ ThreadImpl* MakeThread(
   // Ensure there is always a terminating NUL character.
   thread->name[maxNameLen - 1] = '\0';
 
-#ifndef MACOSX
+#if !defined(MACOSX) && !defined(EMSCRIPTEN)
   // macOS/BSD can only set the name of the calling thread
+  // Emscripten doesn't support pthread_setname_np
   ret = pthread_setname_np(thread->thread, thread->name);
   if (ret != 0 && LOG) {
     LOG->Trace("pthead_setname_np: %s", strerror(ret));
@@ -230,7 +231,7 @@ MutexImpl* MakeMutex(RageMutex* pParent) {
 
 /* Check if condattr_setclock is supported, and supports the clock that
  * RageTimer selected. */
-#if defined(UNIX)
+#if defined(UNIX) && !defined(EMSCRIPTEN)
 #include <dlfcn.h>
 
 #include "arch/ArchHooks/ArchHooks_Unix.h"
@@ -240,7 +241,10 @@ typedef int (*CONDATTR_SET_CLOCK)(pthread_condattr_t* attr, clockid_t clock_id);
 CONDATTR_SET_CLOCK g_CondattrSetclock = nullptr;
 bool bInitialized = false;
 
-#if defined(UNIX)
+#if defined(EMSCRIPTEN)
+void InitMonotonic() { bInitialized = true; }
+clockid_t GetClock() { return CLOCK_MONOTONIC; }
+#elif defined(UNIX)
 clockid_t GetClock() { return ArchHooks_Unix::GetClock(); }
 
 void InitMonotonic() {
