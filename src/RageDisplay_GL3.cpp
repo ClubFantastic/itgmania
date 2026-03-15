@@ -494,6 +494,8 @@ RageDisplay_GL3::RageDisplay_GL3()
 	{
 		m_bTextureEnabled[i] = false;
 		m_iCurrentTextures[i] = 0;
+		m_bCachedTextureFiltering[i] = true;  // default: filtering on
+		m_bCachedTextureWrapping[i] = false;   // default: clamp
 	}
 	for (int i = 0; i < 8; ++i)
 		m_Lights[i].enabled = false;
@@ -1166,8 +1168,13 @@ void RageDisplay_GL3::DrawSymmetricQuadStripInternal( const RageSpriteVertex v[]
 
 void RageDisplay_GL3::ClearAllTextures()
 {
+	// Only clear texture units that are actually bound.
+	// In practice, only unit 0 is used by sprites; units 1-3 are rarely
+	// touched (only by Model and ActorMultiTexture).  Skipping already-
+	// unbound units avoids unnecessary GL calls.
 	FOREACH_ENUM( TextureUnit, i )
-		SetTexture( i, 0 );
+		if (m_iCurrentTextures[i])
+			SetTexture( i, 0 );
 }
 
 int RageDisplay_GL3::GetNumTextureUnits()
@@ -1197,6 +1204,11 @@ void RageDisplay_GL3::SetTexture( TextureUnit tu, uintptr_t iTexture )
 	}
 	m_iCurrentTextures[tu] = iTexture;
 
+	// Invalidate per-texture caches — the new texture may have different
+	// filtering/wrapping state than the previous one.
+	m_bCachedTextureFiltering[tu] = true;  // assume default until told otherwise
+	m_bCachedTextureWrapping[tu] = false;
+
 	glActiveTexture( GL_TEXTURE0 );
 }
 
@@ -1209,6 +1221,10 @@ void RageDisplay_GL3::SetTextureMode( TextureUnit tu, TextureMode tm )
 
 void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 {
+	if (m_bCachedTextureFiltering[tu] == b)
+		return;
+	m_bCachedTextureFiltering[tu] = b;
+
 	glActiveTexture( GL_TEXTURE0 + tu );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, b ? GL_LINEAR : GL_NEAREST );
 
@@ -1241,6 +1257,10 @@ void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 
 void RageDisplay_GL3::SetTextureWrapping( TextureUnit tu, bool b )
 {
+	if (m_bCachedTextureWrapping[tu] == b)
+		return;
+	m_bCachedTextureWrapping[tu] = b;
+
 	glActiveTexture( GL_TEXTURE0 + tu );
 	GLenum mode = b ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mode );

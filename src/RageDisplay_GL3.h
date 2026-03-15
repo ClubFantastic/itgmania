@@ -183,6 +183,10 @@ private:
 	float m_fCachedZBias;
 	CullMode m_CachedCullMode;
 
+	// Per-texture-unit state cache — skip redundant glTexParameteri calls
+	bool m_bCachedTextureFiltering[NUM_TextureUnit];
+	bool m_bCachedTextureWrapping[NUM_TextureUnit];
+
 	// Matrix cache — dirty flags to avoid redundant uniform uploads
 	bool m_bMatrixDirty;
 	// Cache the last uploaded matrices so we can detect changes
