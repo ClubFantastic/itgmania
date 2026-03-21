@@ -80,19 +80,19 @@ inline const std::vector<std::string>& GetDefaultSoundDriverList() {
 #include "ArchHooks/ArchHooks_Emscripten.h"
 #include "LowLevelWindow/LowLevelWindow_SDL.h"
 
-inline const std::vector<RString>& GetDefaultInputDriverList() {
-	static const std::vector<RString> inputDriverList = { "SDL3" };
-	return inputDriverList;
+inline const std::vector<std::string>& GetDefaultInputDriverList() {
+  static const std::vector<std::string> inputDriverList = {"SDL3"};
+  return inputDriverList;
 }
 
-inline const std::vector<RString>& GetDefaultMovieDriverList() {
-	static const std::vector<RString> movieDriverList = { "Null" };
-	return movieDriverList;
+inline const std::vector<std::string>& GetDefaultMovieDriverList() {
+  static const std::vector<std::string> movieDriverList = {"Null"};
+  return movieDriverList;
 }
 
-inline const std::vector<RString>& GetDefaultSoundDriverList() {
-	static const std::vector<RString> soundDriverList = { "SDL", "Null" };
-	return soundDriverList;
+inline const std::vector<std::string>& GetDefaultSoundDriverList() {
+  static const std::vector<std::string> soundDriverList = {"SDL", "Null"};
+  return soundDriverList;
 }
 
 #elif defined(UNIX)

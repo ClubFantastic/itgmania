@@ -9,12 +9,12 @@ class ArchHooks_Emscripten: public ArchHooks
 {
 public:
 	void Init();
-	RString GetArchName() const { return "Emscripten"; }
+	std::string GetArchName() const { return "Emscripten"; }
 	void DumpDebugInfo();
 
 	int64_t GetSystemTimeInMicroseconds();
 
-	void MountInitialFilesystems( const RString &sDirOfExecutable );
+	void MountInitialFilesystems( const std::string &sDirOfExecutable );
 	float GetDisplayAspectRatio() { return 16.0f/9; }
 };
 

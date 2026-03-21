@@ -28,7 +28,7 @@ public:
 	int SeekInternal( int iOffset );
 	int GetFileSize() const;
 	RageFileObjHTTP *Copy() const;
-	RString GetDisplayPath() const { return m_sURL; }
+	std::string GetDisplayPath() const { return m_sURL; }
 
 private:
 	bool EnsureFetched();
@@ -50,17 +50,17 @@ struct HTTPFileEntry
 class RageFileDriverHTTP: public RageFileDriver
 {
 public:
-	RageFileDriverHTTP( const RString &sBaseURL );
+	RageFileDriverHTTP( const std::string &sBaseURL );
 
-	RageFileBasic *Open( const RString &sPath, int iMode, int &iError );
-	void GetDirListing( const RString &sPath, std::vector<RString> &asAddTo,
+	RageFileBasic *Open( const std::string &sPath, int iMode, int &iError );
+	void GetDirListing( const std::string &sPath, std::vector<std::string> &asAddTo,
 	                    bool bOnlyDirs, bool bReturnPathToo );
-	RageFileManager::FileType GetFileType( const RString &sPath );
-	int GetFileSizeInBytes( const RString &sFilePath );
-	void FlushDirCache( const RString & ) override { }
+	RageFileManager::FileType GetFileType( const std::string &sPath );
+	int GetFileSizeInBytes( const std::string &sFilePath );
+	void FlushDirCache( const std::string & ) override { }
 
 private:
-	RString m_sBaseURL;
+	std::string m_sBaseURL;
 
 	/* Simple manifest: map from lowercase path -> entry.
 	 * Directories stored WITH trailing slash. Files WITHOUT. */
@@ -70,7 +70,7 @@ private:
 	std::map<std::string, std::vector<std::pair<std::string,bool>>> m_DirContents;
 
 	void LoadManifest();
-	std::string NormPath( const RString &sPath ) const;
+	std::string NormPath( const std::string &sPath ) const;
 };
 
 #endif // EMSCRIPTEN

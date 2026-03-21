@@ -45,7 +45,7 @@ int64_t ArchHooks::GetSystemTimeInMicroseconds()
 	return static_cast<int64_t>( ms * 1000.0 );
 }
 
-RString ArchHooks::GetPreferredLanguage()
+std::string ArchHooks::GetPreferredLanguage()
 {
 	/* Could use EM_ASM to query navigator.language, but for now default to English. */
 	return "en";
@@ -56,20 +56,20 @@ void ArchHooks_Emscripten::DumpDebugInfo()
 	LOG->Info( "Platform: Emscripten/WebAssembly" );
 }
 
-void ArchHooks::MountInitialFilesystems( const RString &sDirOfExecutable )
+void ArchHooks::MountInitialFilesystems( const std::string &sDirOfExecutable )
 {
 	/* In the browser, game data is served from the same origin as the wasm.
 	 * Use the HTTP driver to fetch files lazily on demand.
 	 * The base URL is the directory containing the HTML page. */
-	RString sBaseURL = "gamedata/";
+	std::string sBaseURL = "gamedata/";
 	FILEMAN->Mount( "http", sBaseURL, "/" );
 }
 
-void ArchHooks::MountUserFilesystems( const RString &sDirOfExecutable )
+void ArchHooks::MountUserFilesystems( const std::string &sDirOfExecutable )
 {
 	/* User data (Save/, Cache/, etc.) goes into the same virtual filesystem.
 	 * In the future this can be backed by IndexedDB via IDBFS for persistence. */
-	RString sUserDataPath = sDirOfExecutable;
+	std::string sUserDataPath = sDirOfExecutable;
 	FILEMAN->Mount( "dir", sUserDataPath + "/Save", "/Save" );
 	FILEMAN->Mount( "dir", sUserDataPath + "/Cache", "/Cache" );
 	FILEMAN->Mount( "dir", sUserDataPath + "/Logs", "/Logs" );

@@ -93,7 +93,7 @@ static std::string toLower( const std::string &s )
 }
 
 /* Normalize a path: ensure leading /, lowercase, collapse slashes. */
-std::string RageFileDriverHTTP::NormPath( const RString &sPath ) const
+std::string RageFileDriverHTTP::NormPath( const std::string &sPath ) const
 {
 	std::string s = sPath.c_str();
 	/* Ensure leading slash */
@@ -107,7 +107,7 @@ std::string RageFileDriverHTTP::NormPath( const RString &sPath ) const
 
 /* ---- RageFileDriverHTTP ---- */
 
-RageFileDriverHTTP::RageFileDriverHTTP( const RString &sBaseURL )
+RageFileDriverHTTP::RageFileDriverHTTP( const std::string &sBaseURL )
 	: RageFileDriver( new NullFilenameDB ),
 	  m_sBaseURL( sBaseURL )
 {
@@ -118,7 +118,7 @@ RageFileDriverHTTP::RageFileDriverHTTP( const RString &sBaseURL )
 
 void RageFileDriverHTTP::LoadManifest()
 {
-	RString sManifestURL = m_sBaseURL + "gamedata-manifest.txt";
+	std::string sManifestURL = m_sBaseURL + "gamedata-manifest.txt";
 	void *pBuf = nullptr;
 	int iSize = 0, iError = 0;
 	emscripten_wget_data( sManifestURL.c_str(), &pBuf, &iSize, &iError );
@@ -130,21 +130,21 @@ void RageFileDriverHTTP::LoadManifest()
 		return;
 	}
 
-	RString sManifest( (const char*)pBuf, iSize );
+	std::string sManifest( (const char*)pBuf, iSize );
 	free( pBuf );
 
-	std::vector<RString> asLines;
+	std::vector<std::string> asLines;
 	split( sManifest, "\n", asLines );
 
 	int iFiles = 0, iDirs = 0;
-	for( const RString &sLine : asLines )
+	for( const std::string &sLine : asLines )
 	{
 		if( sLine.empty() ) continue;
 		size_t iTab = sLine.find( '\t' );
-		if( iTab == RString::npos ) continue;
+		if( iTab == std::string::npos ) continue;
 
 		int iFileSize = StringToInt( sLine.Left(iTab) );
-		RString sPath = sLine.substr( iTab + 1 );
+		std::string sPath = sLine.substr( iTab + 1 );
 		sPath.Replace( "\\", "/" );
 
 		bool bIsDir = (iFileSize == -1);
@@ -198,7 +198,7 @@ void RageFileDriverHTTP::LoadManifest()
 	printf( "HTTP-VFS: loaded manifest: %d files, %d dirs\n", iFiles, iDirs );
 }
 
-RageFileBasic *RageFileDriverHTTP::Open( const RString &sPath, int iMode, int &iError )
+RageFileBasic *RageFileDriverHTTP::Open( const std::string &sPath, int iMode, int &iError )
 {
 	if( iMode != RageFile::READ )
 	{
@@ -216,14 +216,14 @@ RageFileBasic *RageFileDriverHTTP::Open( const RString &sPath, int iMode, int &i
 	}
 
 	/* Build URL */
-	RString sRelPath = sPath;
+	std::string sRelPath = sPath;
 	if( !sRelPath.empty() && sRelPath[0] == '/' )
 		sRelPath = sRelPath.substr(1);
 	return new RageFileObjHTTP( m_sBaseURL + sRelPath );
 }
 
-void RageFileDriverHTTP::GetDirListing( const RString &sPath,
-	std::vector<RString> &asAddTo, bool bOnlyDirs, bool bReturnPathToo )
+void RageFileDriverHTTP::GetDirListing( const std::string &sPath,
+	std::vector<std::string> &asAddTo, bool bOnlyDirs, bool bReturnPathToo )
 {
 	/* sPath is like "/Themes/_fallback/Graphics/_missing*" or "/Songs/*" */
 	std::string s = sPath.c_str();
@@ -291,7 +291,7 @@ void RageFileDriverHTTP::GetDirListing( const RString &sPath,
 	}
 }
 
-RageFileManager::FileType RageFileDriverHTTP::GetFileType( const RString &sPath )
+RageFileManager::FileType RageFileDriverHTTP::GetFileType( const std::string &sPath )
 {
 	std::string sNorm = NormPath( sPath );
 
@@ -311,7 +311,7 @@ RageFileManager::FileType RageFileDriverHTTP::GetFileType( const RString &sPath 
 	return RageFileManager::TYPE_NONE;
 }
 
-int RageFileDriverHTTP::GetFileSizeInBytes( const RString &sFilePath )
+int RageFileDriverHTTP::GetFileSizeInBytes( const std::string &sFilePath )
 {
 	std::string sNorm = NormPath( sFilePath );
 	auto it = m_Manifest.find( sNorm );
@@ -324,7 +324,7 @@ int RageFileDriverHTTP::GetFileSizeInBytes( const RString &sFilePath )
 static struct FileDriverEntry_HTTP: public FileDriverEntry
 {
 	FileDriverEntry_HTTP(): FileDriverEntry( "HTTP" ) { }
-	RageFileDriver *Create( const RString &sRoot ) const
+	RageFileDriver *Create( const std::string &sRoot ) const
 	{
 		return new RageFileDriverHTTP( sRoot );
 	}
