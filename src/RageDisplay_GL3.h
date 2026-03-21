@@ -14,9 +14,9 @@ class RageDisplay_GL3: public RageDisplay
 public:
 	RageDisplay_GL3();
 	virtual ~RageDisplay_GL3();
-	virtual RString Init( const VideoModeParams &p, bool bAllowUnacceleratedRenderer );
+	virtual std::string Init( const VideoModeParams &p, bool bAllowUnacceleratedRenderer );
 
-	virtual RString GetApiDescription() const { return "OpenGL 3.3"; }
+	virtual std::string GetApiDescription() const { return "OpenGL 3.3"; }
 	virtual void GetDisplaySpecs(DisplaySpecs &out) const;
 	void ResolutionChanged();
 	const RagePixelFormatDesc *GetPixelFormatDesc(RagePixelFormat pf) const;
@@ -92,7 +92,7 @@ public:
 	virtual void SetPolygonMode( PolygonMode pm );
 	virtual void SetLineWidth( float fWidth );
 
-	RString GetTextureDiagnostics( uintptr_t id ) const;
+	std::string GetTextureDiagnostics( uintptr_t id ) const;
 
 protected:
 	void DrawQuadsInternal( const RageSpriteVertex v[], int iNumVerts );
@@ -104,7 +104,7 @@ protected:
 	void DrawLineStripInternal( const RageSpriteVertex v[], int iNumVerts, float LineWidth );
 	void DrawSymmetricQuadStripInternal( const RageSpriteVertex v[], int iNumVerts );
 
-	RString TryVideoMode( const VideoModeParams &p, bool &bNewDeviceOut );
+	std::string TryVideoMode( const VideoModeParams &p, bool &bNewDeviceOut );
 	RageSurface* CreateScreenshot();
 	RagePixelFormat GetImgPixelFormat( RageSurface* &img, bool &FreeImg, int width, int height, bool bPalettedTexture );
 

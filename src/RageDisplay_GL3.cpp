@@ -608,12 +608,12 @@ void RageDisplay_GL3::DestroyShaderPrograms()
 
 static LocalizedString OBTAIN_AN_UPDATED_VIDEO_DRIVER_GL3 ( "RageDisplay_GL3", "Obtain an updated driver from your video card manufacturer." );
 
-RString RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnacceleratedRenderer )
+std::string RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnacceleratedRenderer )
 {
 	g_pWind = LowLevelWindow::Create();
 
 	bool bIgnore = false;
-	RString sError = SetVideoMode( p, bIgnore );
+	std::string sError = SetVideoMode( p, bIgnore );
 	if (sError != "")
 		return sError;
 
@@ -687,7 +687,7 @@ RString RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccelerate
 	glEnable( GL_DEPTH_TEST );
 	glDepthFunc( GL_ALWAYS );
 
-	return RString();
+	return std::string();
 }
 
 void RageDisplay_GL3::ResolutionChanged()
@@ -697,9 +697,9 @@ void RageDisplay_GL3::ResolutionChanged()
 	RageDisplay::ResolutionChanged();
 }
 
-RString RageDisplay_GL3::TryVideoMode( const VideoModeParams &p, bool &bNewDeviceOut )
+std::string RageDisplay_GL3::TryVideoMode( const VideoModeParams &p, bool &bNewDeviceOut )
 {
-	RString err;
+	std::string err;
 	err = g_pWind->TryVideoMode( p, bNewDeviceOut );
 	if (err != "")
 		return err;
@@ -713,7 +713,7 @@ RString RageDisplay_GL3::TryVideoMode( const VideoModeParams &p, bool &bNewDevic
 #endif
 	}
 
-	return RString();
+	return std::string();
 }
 
 void RageDisplay_GL3::GetDisplaySpecs(DisplaySpecs &out) const
@@ -1844,9 +1844,9 @@ RageSurface* RageDisplay_GL3::CreateScreenshot()
 	return image;
 }
 
-RString RageDisplay_GL3::GetTextureDiagnostics( uintptr_t id ) const
+std::string RageDisplay_GL3::GetTextureDiagnostics( uintptr_t id ) const
 {
-	return RString();
+	return std::string();
 }
 
 /*
