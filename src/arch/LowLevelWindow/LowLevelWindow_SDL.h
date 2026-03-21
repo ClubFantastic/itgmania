@@ -17,10 +17,10 @@ public:
 	LowLevelWindow_SDL();
 	~LowLevelWindow_SDL();
 
-	void *GetProcAddress(RString s);
-	RString TryVideoMode(const VideoModeParams &p, bool &bNewDeviceOut);
+	void *GetProcAddress(std::string s);
+	std::string TryVideoMode(const VideoModeParams &p, bool &bNewDeviceOut);
 	void LogDebugInformation() const;
-	bool IsSoftwareRenderer( RString &sError );
+	bool IsSoftwareRenderer( std::string &sError );
 	void SwapBuffers();
 	void Update();
 

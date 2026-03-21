@@ -45,12 +45,12 @@ LowLevelWindow_SDL::~LowLevelWindow_SDL()
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-void *LowLevelWindow_SDL::GetProcAddress(RString s)
+void *LowLevelWindow_SDL::GetProcAddress(std::string s)
 {
 	return (void *)SDL_GL_GetProcAddress(s.c_str());
 }
 
-static SDL_DisplayID FindSDLDisplay(const RString &sDisplayId)
+static SDL_DisplayID FindSDLDisplay(const std::string &sDisplayId)
 {
 	if (sDisplayId.empty())
 		return SDL_GetPrimaryDisplay();
@@ -80,7 +80,7 @@ static SDL_DisplayID FindSDLDisplay(const RString &sDisplayId)
 	return found;
 }
 
-RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDeviceOut)
+std::string LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDeviceOut)
 {
 	bNewDeviceOut = false;
 
@@ -232,7 +232,7 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 	// Window icon
 	if (!p.sIconFile.empty())
 	{
-		RString sError;
+		std::string sError;
 		RageSurface *pIcon = RageSurfaceUtils::LoadFile(p.sIconFile, sError);
 		if (pIcon)
 		{
@@ -279,7 +279,7 @@ RString LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNewDev
 		m_CurrentParams.height = pixH;
 	}
 
-	return RString(); // success
+	return std::string(); // success
 }
 
 void LowLevelWindow_SDL::GetDisplaySpecs(DisplaySpecs &out) const
@@ -407,12 +407,12 @@ void LowLevelWindow_SDL::LogDebugInformation() const
 	LOG->Info("GL Version: %s", glGetString(GL_VERSION));
 }
 
-bool LowLevelWindow_SDL::IsSoftwareRenderer(RString &sError)
+bool LowLevelWindow_SDL::IsSoftwareRenderer(std::string &sError)
 {
 	const char *renderer = (const char *)glGetString(GL_RENDERER);
 	if (renderer)
 	{
-		RString sRenderer(renderer);
+		std::string sRenderer(renderer);
 		sRenderer.MakeLower();
 		if (sRenderer.find("software") != std::string::npos ||
 			sRenderer.find("llvmpipe") != std::string::npos ||

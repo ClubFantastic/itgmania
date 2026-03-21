@@ -23,10 +23,10 @@ namespace ImGuiManager
 			return;
 		}
 
-		RString sFontDir = THEME->GetCurThemeDir() + "TrueTypeFonts/";
+		std::string sFontDir = THEME->GetCurThemeDir() + "TrueTypeFonts/";
 
-		std::vector<RString> vsFonts;
-		std::vector<RString> exts = { "ttf", "otf" };
+		std::vector<std::string> vsFonts;
+		std::vector<std::string> exts = { "ttf", "otf" };
 		FILEMAN->GetDirListingWithMultipleExtensions(sFontDir, exts, vsFonts, false, true);
 
 		if (vsFonts.empty())
@@ -37,7 +37,7 @@ namespace ImGuiManager
 
 		ImGuiIO& io = ImGui::GetIO();
 
-		for (const RString& sPath : vsFonts)
+		for (const std::string& sPath : vsFonts)
 		{
 			RageFile f;
 			if (!f.Open(sPath))
@@ -67,7 +67,7 @@ namespace ImGuiManager
 
 			// Extract just the filename for the font name
 			size_t iSlash = sPath.find_last_of('/');
-			RString sName = (iSlash != RString::npos) ? RString(sPath.substr(iSlash + 1)) : sPath;
+			std::string sName = (iSlash != std::string::npos) ? std::string(sPath.substr(iSlash + 1)) : sPath;
 			snprintf(config.Name, sizeof(config.Name), "%s", sName.c_str());
 
 			ImFont* pFont = io.Fonts->AddFontFromMemoryTTF(pData, iSize, 16.0f, &config);
