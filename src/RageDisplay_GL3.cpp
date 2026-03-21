@@ -494,8 +494,8 @@ RageDisplay_GL3::RageDisplay_GL3()
 	{
 		m_bTextureEnabled[i] = false;
 		m_iCurrentTextures[i] = 0;
-		m_bCachedTextureFiltering[i] = true;  // default: filtering on
-		m_bCachedTextureWrapping[i] = false;   // default: clamp
+		m_iCachedTextureFiltering[i] = -1;  // unknown — force first apply
+		m_iCachedTextureWrapping[i] = -1;
 	}
 	for (int i = 0; i < 8; ++i)
 		m_Lights[i].enabled = false;
@@ -756,6 +756,12 @@ bool RageDisplay_GL3::BeginFrame()
 	m_CachedZTestMode = (ZTestMode)-1;
 	m_fCachedZBias = -999.0f;
 	m_CachedCullMode = (CullMode)-1;
+	// Force texture parameter caches to unknown
+	for (int i = 0; i < NUM_TextureUnit; ++i)
+	{
+		m_iCachedTextureFiltering[i] = -1;
+		m_iCachedTextureWrapping[i] = -1;
+	}
 
 	SetZWrite( true );
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
@@ -1206,8 +1212,8 @@ void RageDisplay_GL3::SetTexture( TextureUnit tu, uintptr_t iTexture )
 
 	// Invalidate per-texture caches — the new texture may have different
 	// filtering/wrapping state than the previous one.
-	m_bCachedTextureFiltering[tu] = true;  // assume default until told otherwise
-	m_bCachedTextureWrapping[tu] = false;
+	m_iCachedTextureFiltering[tu] = -1;  // unknown — force next apply
+	m_iCachedTextureWrapping[tu] = -1;
 
 	glActiveTexture( GL_TEXTURE0 );
 }
@@ -1221,9 +1227,9 @@ void RageDisplay_GL3::SetTextureMode( TextureUnit tu, TextureMode tm )
 
 void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 {
-	if (m_bCachedTextureFiltering[tu] == b)
+	if (m_iCachedTextureFiltering[tu] == (int8_t)b)
 		return;
-	m_bCachedTextureFiltering[tu] = b;
+	m_iCachedTextureFiltering[tu] = (int8_t)b;
 
 	glActiveTexture( GL_TEXTURE0 + tu );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, b ? GL_LINEAR : GL_NEAREST );
@@ -1257,9 +1263,9 @@ void RageDisplay_GL3::SetTextureFiltering( TextureUnit tu, bool b )
 
 void RageDisplay_GL3::SetTextureWrapping( TextureUnit tu, bool b )
 {
-	if (m_bCachedTextureWrapping[tu] == b)
+	if (m_iCachedTextureWrapping[tu] == (int8_t)b)
 		return;
-	m_bCachedTextureWrapping[tu] = b;
+	m_iCachedTextureWrapping[tu] = (int8_t)b;
 
 	glActiveTexture( GL_TEXTURE0 + tu );
 	GLenum mode = b ? GL_REPEAT : GL_CLAMP_TO_EDGE;
@@ -1342,6 +1348,10 @@ uintptr_t RageDisplay_GL3::CreateTexture(
 
 	glPixelStorei( GL_UNPACK_ROW_LENGTH, pImg->pitch / pImg->format->BytesPerPixel );
 
+	LOG->Info("GL3::CreateTexture: tex=%u, %ix%i (pot %ix%i), intfmt=0x%x, fmt=0x%x, type=0x%x, pixfmt=%i, surfpixfmt=%i, bpp=%i, mipmaps=%i",
+		(unsigned)iTexHandle, pImg->w, pImg->h, power_of_two(pImg->w), power_of_two(pImg->h),
+		glTexFormat, glImageFormat, glImageType, pixfmt, SurfacePixFmt, pImg->format->BitsPerPixel, bGenerateMipMaps);
+
 	glTexImage2D( GL_TEXTURE_2D, 0, glTexFormat,
 		power_of_two(pImg->w), power_of_two(pImg->h), 0,
 		glImageFormat, glImageType, nullptr );
@@ -1356,6 +1366,11 @@ uintptr_t RageDisplay_GL3::CreateTexture(
 	glPixelStorei( GL_UNPACK_ROW_LENGTH, 0 );
 	glFlush();
 
+	// CreateTexture bound the new texture directly via glBindTexture,
+	// bypassing SetTexture's cache.  Invalidate the cache so the next
+	// SetTexture call doesn't incorrectly early-return.
+	m_iCurrentTextures[TextureUnit_1] = iTexHandle;
+
 	if (bFreeImg)
 		delete pImg;
 	return iTexHandle;
@@ -1367,6 +1382,7 @@ void RageDisplay_GL3::UpdateTexture(
 	int iXOffset, int iYOffset, int iWidth, int iHeight )
 {
 	glBindTexture( GL_TEXTURE_2D, static_cast<GLuint>(iTexHandle) );
+	m_iCurrentTextures[TextureUnit_1] = iTexHandle;
 
 	bool bFreeImg;
 	RagePixelFormat SurfacePixFmt = GetImgPixelFormat( pImg, bFreeImg, iWidth, iHeight, false );

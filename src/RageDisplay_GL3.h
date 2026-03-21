@@ -184,8 +184,9 @@ private:
 	CullMode m_CachedCullMode;
 
 	// Per-texture-unit state cache — skip redundant glTexParameteri calls
-	bool m_bCachedTextureFiltering[NUM_TextureUnit];
-	bool m_bCachedTextureWrapping[NUM_TextureUnit];
+	// Uses int8_t: -1 = unknown (force apply), 0 = false, 1 = true
+	int8_t m_iCachedTextureFiltering[NUM_TextureUnit];
+	int8_t m_iCachedTextureWrapping[NUM_TextureUnit];
 
 	// Matrix cache — dirty flags to avoid redundant uniform uploads
 	bool m_bMatrixDirty;
