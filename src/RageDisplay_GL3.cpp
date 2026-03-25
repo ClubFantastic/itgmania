@@ -26,7 +26,11 @@ using namespace RageDisplay_Legacy_Helpers;
 #include "ImGuiManager.h"
 #endif
 
+#include "RageTimer.h"
 #include "TracyHelper.h"
+#include "GLResourceTracker.h"
+#include "MemoryMonitor.h"
+#include "RageUtil/Endian.h"
 
 #include <cmath>
 #include <cstddef>
@@ -172,7 +176,7 @@ void Init()
 
 GLuint CompileShader( GLenum type, const char *source )
 {
-	GLuint shader = glCreateShader( type );
+	GLuint shader = GL_TRACK_CREATE_SHADER( type );
 	glShaderSource( shader, 1, &source, nullptr );
 	glCompileShader( shader );
 
@@ -183,7 +187,7 @@ GLuint CompileShader( GLenum type, const char *source )
 		GLchar info[1024];
 		glGetShaderInfoLog( shader, sizeof(info), nullptr, info );
 		LOG->Warn( "GL3 shader compile error: %s", info );
-		glDeleteShader( shader );
+		GL_TRACK_DELETE_SHADER( shader );
 		return 0;
 	}
 	return shader;
@@ -191,7 +195,7 @@ GLuint CompileShader( GLenum type, const char *source )
 
 GLuint LinkProgram( GLuint vert, GLuint frag )
 {
-	GLuint prog = glCreateProgram();
+	GLuint prog = GL_TRACK_CREATE_PROGRAM();
 	glAttachShader( prog, vert );
 	glAttachShader( prog, frag );
 	glLinkProgram( prog );
@@ -203,7 +207,7 @@ GLuint LinkProgram( GLuint vert, GLuint frag )
 		GLchar info[1024];
 		glGetProgramInfoLog( prog, sizeof(info), nullptr, info );
 		LOG->Warn( "GL3 program link error: %s", info );
-		glDeleteProgram( prog );
+		GL_TRACK_DELETE_PROGRAM( prog );
 		return 0;
 	}
 	return prog;
@@ -214,10 +218,10 @@ GLuint BuildProgram( const char *vertSrc, const char *fragSrc )
 	GLuint vert = CompileShader( GL_VERTEX_SHADER, vertSrc );
 	if (!vert) return 0;
 	GLuint frag = CompileShader( GL_FRAGMENT_SHADER, fragSrc );
-	if (!frag) { glDeleteShader(vert); return 0; }
+	if (!frag) { GL_TRACK_DELETE_SHADER(vert); return 0; }
 	GLuint prog = LinkProgram( vert, frag );
-	glDeleteShader( vert );
-	glDeleteShader( frag );
+	GL_TRACK_DELETE_SHADER( vert );
+	GL_TRACK_DELETE_SHADER( frag );
 	return prog;
 }
 
@@ -237,13 +241,13 @@ RenderTarget_FBO_GL3::RenderTarget_FBO_GL3()
 RenderTarget_FBO_GL3::~RenderTarget_FBO_GL3()
 {
 	if (m_iDepthBuffer)
-		glDeleteRenderbuffers( 1, &m_iDepthBuffer );
+		GL_TRACK_DELETE_RENDERBUFFERS( 1, &m_iDepthBuffer );
 	if (m_iFrameBuffer)
-		glDeleteFramebuffers( 1, &m_iFrameBuffer );
+		GL_TRACK_DELETE_FBOS( 1, &m_iFrameBuffer );
 	if (m_iTexHandle)
 	{
 		GLuint tex = static_cast<GLuint>(m_iTexHandle);
-		glDeleteTextures( 1, &tex );
+		GL_TRACK_DELETE_TEXTURES( 1, &tex );
 	}
 }
 
@@ -257,7 +261,7 @@ void RenderTarget_FBO_GL3::Create( const RenderTargetParam &param, int &iTexture
 	iTextureHeightOut = iTextureHeight;
 
 	GLuint tex;
-	glGenTextures( 1, &tex );
+	GL_TRACK_GEN_TEXTURES( 1, &tex );
 	m_iTexHandle = tex;
 
 	glBindTexture( GL_TEXTURE_2D, tex );
@@ -276,13 +280,13 @@ void RenderTarget_FBO_GL3::Create( const RenderTargetParam &param, int &iTexture
 	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 
-	glGenFramebuffers( 1, &m_iFrameBuffer );
+	GL_TRACK_GEN_FBOS( 1, &m_iFrameBuffer );
 	glBindFramebuffer( GL_FRAMEBUFFER, m_iFrameBuffer );
 	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0 );
 
 	if (param.bWithDepthBuffer)
 	{
-		glGenRenderbuffers( 1, &m_iDepthBuffer );
+		GL_TRACK_GEN_RENDERBUFFERS( 1, &m_iDepthBuffer );
 		glBindRenderbuffer( GL_RENDERBUFFER, m_iDepthBuffer );
 		glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, iTextureWidth, iTextureHeight );
 		glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_iDepthBuffer );
@@ -323,12 +327,12 @@ public:
 	}
 	~RageCompiledGeometryGL3()
 	{
-		if (m_VAO) glDeleteVertexArrays( 1, &m_VAO );
-		if (m_VBOPos) glDeleteBuffers( 1, &m_VBOPos );
-		if (m_VBONormal) glDeleteBuffers( 1, &m_VBONormal );
-		if (m_VBOTex) glDeleteBuffers( 1, &m_VBOTex );
-		if (m_VBOTextureMatrixScale) glDeleteBuffers( 1, &m_VBOTextureMatrixScale );
-		if (m_IBO) glDeleteBuffers( 1, &m_IBO );
+		if (m_VAO) GL_TRACK_DELETE_VAOS( 1, &m_VAO );
+		if (m_VBOPos) GL_TRACK_DELETE_BUFFERS( 1, &m_VBOPos );
+		if (m_VBONormal) GL_TRACK_DELETE_BUFFERS( 1, &m_VBONormal );
+		if (m_VBOTex) GL_TRACK_DELETE_BUFFERS( 1, &m_VBOTex );
+		if (m_VBOTextureMatrixScale) GL_TRACK_DELETE_BUFFERS( 1, &m_VBOTextureMatrixScale );
+		if (m_IBO) GL_TRACK_DELETE_BUFFERS( 1, &m_IBO );
 	}
 
 	void Allocate( const std::vector<msMesh> &vMeshes )
@@ -337,16 +341,16 @@ public:
 		size_t totalVerts = std::max( GetTotalVertices(), (size_t)1 );
 		size_t totalTris = std::max( GetTotalTriangles(), (size_t)1 );
 
-		glGenVertexArrays( 1, &m_VAO );
+		GL_TRACK_GEN_VAOS( 1, &m_VAO );
 		glBindVertexArray( m_VAO );
 
-		glGenBuffers( 1, &m_VBOPos );
+		GL_TRACK_GEN_BUFFERS( 1, &m_VBOPos );
 		glBindBuffer( GL_ARRAY_BUFFER, m_VBOPos );
 		glBufferData( GL_ARRAY_BUFFER, totalVerts * sizeof(RageVector3), nullptr, GL_DYNAMIC_DRAW );
 		glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, nullptr );
 		glEnableVertexAttribArray( 0 );
 
-		glGenBuffers( 1, &m_VBONormal );
+		GL_TRACK_GEN_BUFFERS( 1, &m_VBONormal );
 		glBindBuffer( GL_ARRAY_BUFFER, m_VBONormal );
 		glBufferData( GL_ARRAY_BUFFER, totalVerts * sizeof(RageVector3), nullptr, GL_DYNAMIC_DRAW );
 		glVertexAttribPointer( 1, 3, GL_FLOAT, GL_FALSE, 0, nullptr );
@@ -355,19 +359,19 @@ public:
 		// No per-vertex color for model geometry — set a default white
 		glVertexAttrib4f( 2, 1.0f, 1.0f, 1.0f, 1.0f );
 
-		glGenBuffers( 1, &m_VBOTex );
+		GL_TRACK_GEN_BUFFERS( 1, &m_VBOTex );
 		glBindBuffer( GL_ARRAY_BUFFER, m_VBOTex );
 		glBufferData( GL_ARRAY_BUFFER, totalVerts * sizeof(RageVector2), nullptr, GL_DYNAMIC_DRAW );
 		glVertexAttribPointer( 3, 2, GL_FLOAT, GL_FALSE, 0, nullptr );
 		glEnableVertexAttribArray( 3 );
 
 		// TextureMatrixScale (for scrolling textures on models)
-		glGenBuffers( 1, &m_VBOTextureMatrixScale );
+		GL_TRACK_GEN_BUFFERS( 1, &m_VBOTextureMatrixScale );
 		glBindBuffer( GL_ARRAY_BUFFER, m_VBOTextureMatrixScale );
 		glBufferData( GL_ARRAY_BUFFER, totalVerts * sizeof(RageVector2), nullptr, GL_DYNAMIC_DRAW );
 		// Not bound to an attrib yet — will be used if texture matrix scaling is needed
 
-		glGenBuffers( 1, &m_IBO );
+		GL_TRACK_GEN_BUFFERS( 1, &m_IBO );
 		glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, m_IBO );
 		glBufferData( GL_ELEMENT_ARRAY_BUFFER, totalTris * sizeof(msTriangle), nullptr, GL_DYNAMIC_DRAW );
 
@@ -514,10 +518,10 @@ RageDisplay_GL3::~RageDisplay_GL3()
 {
 	DestroyShaderPrograms();
 
-	if (m_VAO) glDeleteVertexArrays( 1, &m_VAO );
-	if (m_VBO) glDeleteBuffers( 1, &m_VBO );
-	if (m_QuadIBO) glDeleteBuffers( 1, &m_QuadIBO );
-	if (m_SymQuadIBO) glDeleteBuffers( 1, &m_SymQuadIBO );
+	if (m_VAO) GL_TRACK_DELETE_VAOS( 1, &m_VAO );
+	if (m_VBO) GL_TRACK_DELETE_BUFFERS( 1, &m_VBO );
+	if (m_QuadIBO) GL_TRACK_DELETE_BUFFERS( 1, &m_QuadIBO );
+	if (m_SymQuadIBO) GL_TRACK_DELETE_BUFFERS( 1, &m_SymQuadIBO );
 
 	for (auto &pair : m_mapRenderTargets)
 		delete pair.second;
@@ -597,10 +601,10 @@ void RageDisplay_GL3::InitShaderPrograms()
 
 void RageDisplay_GL3::DestroyShaderPrograms()
 {
-	if (m_SpriteProgram) glDeleteProgram( m_SpriteProgram );
-	if (m_LitSpriteProgram) glDeleteProgram( m_LitSpriteProgram );
+	if (m_SpriteProgram) GL_TRACK_DELETE_PROGRAM( m_SpriteProgram );
+	if (m_LitSpriteProgram) GL_TRACK_DELETE_PROGRAM( m_LitSpriteProgram );
 	for (int i = 0; i < NUM_EffectMode; ++i)
-		if (m_EffectPrograms[i]) glDeleteProgram( m_EffectPrograms[i] );
+		if (m_EffectPrograms[i]) GL_TRACK_DELETE_PROGRAM( m_EffectPrograms[i] );
 
 	m_SpriteProgram = 0;
 	m_LitSpriteProgram = 0;
@@ -644,10 +648,10 @@ std::string RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccele
 		return "GL3: Failed to compile required shaders.";
 
 	// Create VAO and VBO for dynamic sprite vertex data
-	glGenVertexArrays( 1, &m_VAO );
+	GL_TRACK_GEN_VAOS( 1, &m_VAO );
 	glBindVertexArray( m_VAO );
 
-	glGenBuffers( 1, &m_VBO );
+	GL_TRACK_GEN_BUFFERS( 1, &m_VBO );
 	glBindBuffer( GL_ARRAY_BUFFER, m_VBO );
 	m_iVBOSize = 4096; // Pre-allocate for ~1024 quads to avoid runtime reallocation
 	glBufferData( GL_ARRAY_BUFFER, m_iVBOSize * sizeof(RageSpriteVertex), nullptr, GL_STREAM_DRAW );
@@ -673,12 +677,12 @@ std::string RageDisplay_GL3::Init( const VideoModeParams &p, bool bAllowUnaccele
 	glEnableVertexAttribArray( 3 );
 
 	// Create quad index buffer (will grow as needed)
-	glGenBuffers( 1, &m_QuadIBO );
+	GL_TRACK_GEN_BUFFERS( 1, &m_QuadIBO );
 	m_iQuadIBOSize = 0;
 	EnsureQuadIBO( 1024 ); // pre-allocate for 1024 quads
 
 	// Create symmetric quad strip IBO (reused across calls)
-	glGenBuffers( 1, &m_SymQuadIBO );
+	GL_TRACK_GEN_BUFFERS( 1, &m_SymQuadIBO );
 	m_iSymQuadIBOSize = 0;
 
 	glBindVertexArray( 0 );
@@ -779,18 +783,18 @@ void RageDisplay_GL3::EndFrame()
 	ZoneScopedN("GL3::EndFrame");
 
 	FrameLimitBeforeVsync( g_pWind->GetActualVideoModeParams().rate );
+
+	FrameLimitBeforeVsync( g_pWind->GetActualVideoModeParams().rate );
 	g_pWind->SwapBuffers();
 	FrameLimitAfterVsync();
 
-	// When vsync is on, SwapBuffers already blocks until the next display
-	// refresh, so glFinish() is redundant and just adds a full pipeline stall.
-	// When vsync is off, glFinish() prevents the driver from queuing multiple
-	// frames, keeping the engine state close to what's on screen.
 	if (!g_pWind->GetActualVideoModeParams().vsync)
 		glFinish();
 
 	g_pWind->Update();
 
+	GL_TRACK_LOG_STATS();
+	MEM_MON_LOG_STATS();
 	FrameMark;
 	RageDisplay::EndFrame();
 }
@@ -1331,7 +1335,7 @@ uintptr_t RageDisplay_GL3::CreateTexture(
 	glActiveTexture( GL_TEXTURE0 );
 
 	uintptr_t iTexHandle;
-	glGenTextures( 1, reinterpret_cast<GLuint*>(&iTexHandle) );
+	GL_TRACK_GEN_TEXTURES( 1, reinterpret_cast<GLuint*>(&iTexHandle) );
 	ASSERT( iTexHandle != 0 );
 
 	glBindTexture( GL_TEXTURE_2D, static_cast<GLuint>(iTexHandle) );
@@ -1415,7 +1419,7 @@ void RageDisplay_GL3::DeleteTexture( uintptr_t iTexture )
 		return;
 	}
 
-	glDeleteTextures( 1, reinterpret_cast<GLuint*>(&iTexture) );
+	GL_TRACK_DELETE_TEXTURES( 1, reinterpret_cast<GLuint*>(&iTexture) );
 }
 
 RageSurface *RageDisplay_GL3::GetTexture( uintptr_t iTexture )

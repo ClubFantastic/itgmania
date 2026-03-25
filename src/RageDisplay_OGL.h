@@ -139,6 +139,23 @@ class RageDisplay_Legacy : public RageDisplay {
 
  private:
   RageTextureRenderTarget* offscreenRenderTarget;
+
+  // Streaming VBO for per-frame sprite vertex data (replaces client-side arrays)
+  unsigned int m_iSpriteVBO;
+  int m_iSpriteVBOSize;  // current VBO capacity in vertices
+  void InitSpriteVBO();
+  void DestroySpriteVBO();
+  void UploadSpriteVertices(const RageSpriteVertex v[], int iNumVerts);
+
+  // Mailbox presentation: render to FBO at full speed, blit+swap at display rate.
+  // This avoids the NVIDIA Wayland driver bug where each SwapBuffers/glFinish
+  // leaks ~17KB of internal state.
+  unsigned int m_iMailboxFBO;
+  unsigned int m_iMailboxColorTex;
+  int m_iMailboxWidth;
+  int m_iMailboxHeight;
+  void InitMailboxFBO();
+  void DestroyMailboxFBO();
 };
 
 #endif

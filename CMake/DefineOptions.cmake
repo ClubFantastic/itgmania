@@ -74,3 +74,9 @@ option(WITH_TRACY "Build with Tracy profiler instrumentation." OFF)
 
 option(WITH_MINIMAID "Build with Minimaid support." ON)
 
+option(WITH_ASAN "Build with AddressSanitizer and LeakSanitizer." OFF)
+
+option(WITH_GL_RESOURCE_TRACKING "Build with GL resource allocation/deallocation tracking." OFF)
+
+option(WITH_MEMORY_MONITOR "Build with periodic RSS/Lua/malloc memory logging." OFF)
+

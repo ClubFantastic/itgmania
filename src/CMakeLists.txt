@@ -126,6 +126,19 @@ target_compile_options("${SM_EXE_NAME}" PRIVATE
 
 set(SM_COMPILE_FLAGS "")
 
+if(WITH_ASAN AND NOT MSVC)
+  target_compile_options("${SM_EXE_NAME}" PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+  target_link_options("${SM_EXE_NAME}" PRIVATE -fsanitize=address)
+endif()
+
+if(WITH_GL_RESOURCE_TRACKING)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE GL_RESOURCE_TRACKING)
+endif()
+
+if(WITH_MEMORY_MONITOR)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE MEMORY_MONITOR)
+endif()
+
 if(WITH_SSE2)
   if(MSVC)
     if(SM_WIN32_ARCH MATCHES "x86")

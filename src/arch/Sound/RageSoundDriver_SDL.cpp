@@ -4,6 +4,7 @@
 #include "RageUtil.h"
 #include "RageTimer.h"
 #include "PrefsManager.h"
+#include "RageSoundConstants.h"
 
 #include <cstdint>
 #include <cstring>
@@ -41,7 +42,7 @@ std::string RageSoundDriver_SDL::Init()
 
 	m_iSampleRate = PREFSMAN->m_iSoundPreferredSampleRate;
 	if( m_iSampleRate == 0 )
-		m_iSampleRate = kFallbackSampleRate;
+		m_iSampleRate = FALLBACK_SAMPLE_RATE;
 
 	// On Emscripten, query the device's native sample rate first and use it
 	// directly to avoid resampling artifacts in the Web Audio API.

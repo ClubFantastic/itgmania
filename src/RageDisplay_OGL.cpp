@@ -1,10 +1,5 @@
 #include "RageDisplay_OGL.h"
 
-#if defined(HAS_SDL3)
-#include "arch/LowLevelWindow/LowLevelWindow_SDL.h"
-#include "ImGuiManager.h"
-#endif
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -34,7 +29,10 @@
 #include "RageTextureRenderTarget.h"
 #include "RageTypes.h"
 #include "RageUtil.h"
+#include "RageTimer.h"
 #include "RageUtil/Endian.h"
+#include "GLResourceTracker.h"
+#include "MemoryMonitor.h"
 #include "Sprite.h"
 #include "arch/LowLevelWindow/LowLevelWindow.h"
 #include "global.h"
@@ -88,23 +86,6 @@ static RenderTarget* g_pCurrentRenderTarget = nullptr;
 static LowLevelWindow* g_pWind;
 
 static bool g_bInvertY = false;
-
-// State cache to avoid redundant GL calls.
-// These track the last values sent to GL so we can skip no-op calls.
-static BlendMode g_CachedBlendMode = BLEND_NORMAL;
-static bool g_bCachedZWrite = true;
-static ZTestMode g_CachedZTestMode = ZTEST_OFF;
-static float g_fCachedZBias = 0.0f;
-static CullMode g_CachedCullMode = CULL_NONE;
-static uintptr_t g_CachedTextures[NUM_TextureUnit] = {};
-static bool g_bStateCacheValid = false;
-
-static void InvalidateStateCache()
-{
-	g_bStateCacheValid = false;
-	for (int i = 0; i < NUM_TextureUnit; ++i)
-		g_CachedTextures[i] = (uintptr_t)-1; // force rebind on next SetTexture
-}
 
 static void InvalidateObjects();
 
@@ -283,6 +264,12 @@ RageDisplay_Legacy::RageDisplay_Legacy() {
   g_pWind = nullptr;
   g_bTextureMatrixShader = 0;
   offscreenRenderTarget = nullptr;
+  m_iSpriteVBO = 0;
+  m_iSpriteVBOSize = 0;
+  m_iMailboxFBO = 0;
+  m_iMailboxColorTex = 0;
+  m_iMailboxWidth = 0;
+  m_iMailboxHeight = 0;
 }
 
 std::string GetInfoLog(GLhandleARB h) {
@@ -612,21 +599,153 @@ std::string RageDisplay_Legacy::Init(
   glGetFloatv(GL_LINE_WIDTH_RANGE, g_line_range);
   glGetFloatv(GL_POINT_SIZE_RANGE, g_point_range);
 
-#if defined(HAS_SDL3)
-  {
-    auto* sdlWind = static_cast<LowLevelWindow_SDL*>(g_pWind);
-    ImGuiManager::Initialize(sdlWind->GetWindow(), sdlWind->GetGLContext());
-  }
-#endif
-
   return std::string();
 }
 
 RageDisplay_Legacy::~RageDisplay_Legacy() {
-#if defined(HAS_SDL3)
-  ImGuiManager::Shutdown();
-#endif
+  DestroyMailboxFBO();
+  DestroySpriteVBO();
   delete g_pWind;
+}
+
+void RageDisplay_Legacy::InitSpriteVBO() {
+  if (m_iSpriteVBO || !GLEW_ARB_vertex_buffer_object) return;
+  GL_TRACK_GEN_BUFFERS_ARB(1, &m_iSpriteVBO);
+  m_iSpriteVBOSize = 1024;
+  glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_iSpriteVBO);
+  glBufferDataARB(GL_ARRAY_BUFFER_ARB,
+      m_iSpriteVBOSize * sizeof(RageSpriteVertex), nullptr, GL_STREAM_DRAW);
+  glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+}
+
+void RageDisplay_Legacy::DestroySpriteVBO() {
+  if (m_iSpriteVBO) {
+    GL_TRACK_DELETE_BUFFERS_ARB(1, &m_iSpriteVBO);
+    m_iSpriteVBO = 0;
+    m_iSpriteVBOSize = 0;
+  }
+}
+
+void RageDisplay_Legacy::UploadSpriteVertices(
+    const RageSpriteVertex v[], int iNumVerts) {
+  if (!m_iSpriteVBO) InitSpriteVBO();
+  if (!m_iSpriteVBO) {
+    // VBOs not available — fall back to client-side arrays (shouldn't happen
+    // on any hardware from the last 20 years, but just in case)
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, sizeof(RageSpriteVertex),
+        &v[0].p);
+    glEnableClientState(GL_NORMAL_ARRAY);
+    glNormalPointer(GL_FLOAT, sizeof(RageSpriteVertex),
+        &v[0].n);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(RageSpriteVertex),
+        &v[0].c);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(RageSpriteVertex),
+        &v[0].t);
+    if (GLEW_ARB_multitexture) {
+      glClientActiveTextureARB(GL_TEXTURE1_ARB);
+      glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+      glTexCoordPointer(2, GL_FLOAT, sizeof(RageSpriteVertex),
+          &v[0].t);
+      glClientActiveTextureARB(GL_TEXTURE0_ARB);
+    }
+    return;
+  }
+
+  glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_iSpriteVBO);
+
+  // Grow VBO if needed (double capacity)
+  if (iNumVerts > m_iSpriteVBOSize) {
+    m_iSpriteVBOSize = iNumVerts * 2;
+    glBufferDataARB(GL_ARRAY_BUFFER_ARB,
+        m_iSpriteVBOSize * sizeof(RageSpriteVertex), nullptr, GL_STREAM_DRAW);
+  }
+
+  // Orphan + upload: allocate new storage, then fill it. This avoids
+  // synchronization stalls — the driver can keep the old buffer alive
+  // until the GPU is done with it, while we write into fresh memory.
+  glBufferDataARB(GL_ARRAY_BUFFER_ARB,
+      m_iSpriteVBOSize * sizeof(RageSpriteVertex), nullptr, GL_STREAM_DRAW);
+  glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, 0,
+      iNumVerts * sizeof(RageSpriteVertex), v);
+
+  // Set up interleaved vertex attrib pointers into VBO (offsets, not pointers)
+  const GLsizei stride = sizeof(RageSpriteVertex);
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glVertexPointer(3, GL_FLOAT, stride,
+      reinterpret_cast<void*>(offsetof(RageSpriteVertex, p)));
+  glEnableClientState(GL_NORMAL_ARRAY);
+  glNormalPointer(GL_FLOAT, stride,
+      reinterpret_cast<void*>(offsetof(RageSpriteVertex, n)));
+  glEnableClientState(GL_COLOR_ARRAY);
+  glColorPointer(4, GL_UNSIGNED_BYTE, stride,
+      reinterpret_cast<void*>(offsetof(RageSpriteVertex, c)));
+  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+  glTexCoordPointer(2, GL_FLOAT, stride,
+      reinterpret_cast<void*>(offsetof(RageSpriteVertex, t)));
+  if (GLEW_ARB_multitexture) {
+    glClientActiveTextureARB(GL_TEXTURE1_ARB);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer(2, GL_FLOAT, stride,
+        reinterpret_cast<void*>(offsetof(RageSpriteVertex, t)));
+    glClientActiveTextureARB(GL_TEXTURE0_ARB);
+  }
+}
+
+void RageDisplay_Legacy::InitMailboxFBO() {
+  if (m_iMailboxFBO) return;
+  if (!GLEW_EXT_framebuffer_object && !GLEW_ARB_framebuffer_object) return;
+
+  int w = g_pWind->GetActualVideoModeParams().width;
+  int h = g_pWind->GetActualVideoModeParams().height;
+  if (w <= 0 || h <= 0) return;
+
+  glGenTextures(1, &m_iMailboxColorTex);
+  glBindTexture(GL_TEXTURE_2D, m_iMailboxColorTex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  glGenFramebuffersEXT(1, &m_iMailboxFBO);
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_iMailboxFBO);
+  glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT,
+      GL_TEXTURE_2D, m_iMailboxColorTex, 0);
+
+  GLenum status = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT);
+  if (status != GL_FRAMEBUFFER_COMPLETE_EXT) {
+    LOG->Warn("Mailbox FBO incomplete (0x%x), disabling mailbox presentation", status);
+    glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+    glDeleteFramebuffersEXT(1, &m_iMailboxFBO);
+    glDeleteTextures(1, &m_iMailboxColorTex);
+    m_iMailboxFBO = 0;
+    m_iMailboxColorTex = 0;
+    return;
+  }
+
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  m_iMailboxWidth = w;
+  m_iMailboxHeight = h;
+  LOG->Info("Mailbox FBO created: %dx%d", w, h);
+}
+
+void RageDisplay_Legacy::DestroyMailboxFBO() {
+  if (m_iMailboxFBO) {
+    glDeleteFramebuffersEXT(1, &m_iMailboxFBO);
+    m_iMailboxFBO = 0;
+  }
+  if (m_iMailboxColorTex) {
+    glDeleteTextures(1, &m_iMailboxColorTex);
+    m_iMailboxColorTex = 0;
+  }
+  m_iMailboxWidth = 0;
+  m_iMailboxHeight = 0;
+}
+
+void RageDisplay_Legacy::GetDisplaySpecs(DisplaySpecs& out) const {
+  out.clear();
+  g_pWind->GetDisplaySpecs(out);
 }
 
 static void CheckPalettedTextures() {
@@ -904,10 +1023,8 @@ bool RageDisplay_Legacy::BeginFrame() {
   glViewport(0, 0, fWidth, fHeight);
 
   glClearColor(0, 0, 0, 0);
-  InvalidateStateCache();
   SetZWrite(true);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  g_bStateCacheValid = true;
 
   bool beginFrame = RageDisplay::BeginFrame();
   if (beginFrame && UseOffscreenRenderTarget()) {
@@ -940,19 +1057,12 @@ void RageDisplay_Legacy::EndFrame() {
   g_pWind->SwapBuffers();
   FrameLimitAfterVsync();
 
-  // Some would advise against glFinish(), ever. Those people don't realize
-  // the degree of freedom GL hosts are permitted in queueing commands.
-  // If left to its own devices, the host could lag behind several frames' worth
-  // of commands.
-  // glFlush() only forces the host to not wait to execute all commands
-  // sent so far; it does NOT block on those commands until they finish.
-  // glFinish() blocks. We WANT to block. Why? This puts the engine state
-  // reflected by the next frame as close as possible to the on-screen
-  // appearance of that frame.
   glFinish();
 
   g_pWind->Update();
 
+  GL_TRACK_LOG_STATS();
+  MEM_MON_LOG_STATS();
   RageDisplay::EndFrame();
 }
 
@@ -1245,15 +1355,15 @@ RageCompiledGeometryHWOGL::RageCompiledGeometryHWOGL() {
 RageCompiledGeometryHWOGL::~RageCompiledGeometryHWOGL() {
   DebugFlushGLErrors();
 
-  glDeleteBuffersARB(1, &m_nPositions);
+  GL_TRACK_DELETE_BUFFERS_ARB(1, &m_nPositions);
   DebugAssertNoGLError();
-  glDeleteBuffersARB(1, &m_nTextureCoords);
+  GL_TRACK_DELETE_BUFFERS_ARB(1, &m_nTextureCoords);
   DebugAssertNoGLError();
-  glDeleteBuffersARB(1, &m_nNormals);
+  GL_TRACK_DELETE_BUFFERS_ARB(1, &m_nNormals);
   DebugAssertNoGLError();
-  glDeleteBuffersARB(1, &m_nTriangles);
+  GL_TRACK_DELETE_BUFFERS_ARB(1, &m_nTriangles);
   DebugAssertNoGLError();
-  glDeleteBuffersARB(1, &m_nTextureMatrixScale);
+  GL_TRACK_DELETE_BUFFERS_ARB(1, &m_nTextureMatrixScale);
   DebugAssertNoGLError();
 }
 
@@ -1261,27 +1371,27 @@ void RageCompiledGeometryHWOGL::AllocateBuffers() {
   DebugFlushGLErrors();
 
   if (!m_nPositions) {
-    glGenBuffersARB(1, &m_nPositions);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_nPositions);
     DebugAssertNoGLError();
   }
 
   if (!m_nTextureCoords) {
-    glGenBuffersARB(1, &m_nTextureCoords);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_nTextureCoords);
     DebugAssertNoGLError();
   }
 
   if (!m_nNormals) {
-    glGenBuffersARB(1, &m_nNormals);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_nNormals);
     DebugAssertNoGLError();
   }
 
   if (!m_nTriangles) {
-    glGenBuffersARB(1, &m_nTriangles);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_nTriangles);
     DebugAssertNoGLError();
   }
 
   if (!m_nTextureMatrixScale) {
-    glGenBuffersARB(1, &m_nTextureMatrixScale);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_nTextureMatrixScale);
     DebugAssertNoGLError();
   }
 }
@@ -1508,19 +1618,17 @@ void RageDisplay_Legacy::DeleteCompiledGeometry(RageCompiledGeometry* p) {
 
 void RageDisplay_Legacy::DrawQuadsInternal(
     const RageSpriteVertex v[], int iNumVerts) {
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_QUADS, 0, iNumVerts);
 }
 
 void RageDisplay_Legacy::DrawQuadStripInternal(
     const RageSpriteVertex v[], int iNumVerts) {
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_QUAD_STRIP, 0, iNumVerts);
 }
 
@@ -1551,37 +1659,36 @@ void RageDisplay_Legacy::DrawSymmetricQuadStripInternal(
     vIndices[i * 12 + 11] = i * 3 + 5;
   }
 
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
+  // Element array must be unbound for client-side index arrays
+  if (GLEW_ARB_vertex_buffer_object)
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
   glDrawElements(GL_TRIANGLES, iNumIndices, GL_UNSIGNED_SHORT, &vIndices[0]);
 }
 
 void RageDisplay_Legacy::DrawFanInternal(
     const RageSpriteVertex v[], int iNumVerts) {
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_TRIANGLE_FAN, 0, iNumVerts);
 }
 
 void RageDisplay_Legacy::DrawStripInternal(
     const RageSpriteVertex v[], int iNumVerts) {
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, iNumVerts);
 }
 
 void RageDisplay_Legacy::DrawTrianglesInternal(
     const RageSpriteVertex v[], int iNumVerts) {
-  TurnOffHardwareVBO();
   SendCurrentMatrices();
 
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_TRIANGLES, 0, iNumVerts);
 }
 
@@ -1595,8 +1702,6 @@ void RageDisplay_Legacy::DrawCompiledGeometryInternal(
 
 void RageDisplay_Legacy::DrawLineStripInternal(
     const RageSpriteVertex v[], int iNumVerts, float fLineWidth) {
-  TurnOffHardwareVBO();
-
   if (!GetActualVideoModeParams().bSmoothLines) {
     /* Fall back on the generic polygon-based line strip. */
     RageDisplay::DrawLineStripInternal(v, iNumVerts, fLineWidth);
@@ -1635,7 +1740,7 @@ void RageDisplay_Legacy::DrawLineStripInternal(
   glLineWidth(fLineWidth);
 
   /* Draw the line loop: */
-  SetupVertices(v, iNumVerts);
+  UploadSpriteVertices(v, iNumVerts);
   glDrawArrays(GL_LINE_STRIP, 0, iNumVerts);
   StatsAddVerts(iNumVerts);
 
@@ -1662,7 +1767,7 @@ void RageDisplay_Legacy::DrawLineStripInternal(
 
   glEnable(GL_POINT_SMOOTH);
 
-  SetupVertices(v, iNumVerts);
+  /* Vertices are already uploaded — just draw again as points */
   glDrawArrays(GL_POINTS, 0, iNumVerts);
   StatsAddVerts(iNumVerts);
 
@@ -1683,10 +1788,8 @@ static bool SetTextureUnit(TextureUnit tu) {
 }
 
 void RageDisplay_Legacy::ClearAllTextures() {
-  FOREACH_ENUM(TextureUnit, i) {
-    if (g_CachedTextures[i])
-      SetTexture(i, 0);
-  }
+  FOREACH_ENUM(TextureUnit, i)
+  SetTexture(i, 0);
 
   // HACK:  Reset the active texture to 0.
   // TODO:  Change all texture functions to take a stage number.
@@ -1704,11 +1807,6 @@ int RageDisplay_Legacy::GetNumTextureUnits() {
 }
 
 void RageDisplay_Legacy::SetTexture(TextureUnit tu, uintptr_t iTexture) {
-  // Skip if the texture is already bound to this unit
-  if (g_CachedTextures[tu] == iTexture)
-    return;
-  g_CachedTextures[tu] = iTexture;
-
   if (!SetTextureUnit(tu)) {
     return;
   }
@@ -1879,10 +1977,6 @@ bool RageDisplay_Legacy::IsEffectModeSupported(EffectMode effect) {
 }
 
 void RageDisplay_Legacy::SetBlendMode(BlendMode mode) {
-  if (g_bStateCacheValid && g_CachedBlendMode == mode)
-    return;
-  g_CachedBlendMode = mode;
-
   glEnable(GL_BLEND);
 
   if (glBlendEquation != nullptr) {
@@ -1983,18 +2077,9 @@ void RageDisplay_Legacy::ClearZBuffer() {
   SetZWrite(write);
 }
 
-void RageDisplay_Legacy::SetZWrite(bool b) {
-  if (g_bStateCacheValid && g_bCachedZWrite == b)
-    return;
-  g_bCachedZWrite = b;
-  glDepthMask(b);
-}
+void RageDisplay_Legacy::SetZWrite(bool b) { glDepthMask(b); }
 
 void RageDisplay_Legacy::SetZBias(float f) {
-  if (g_bStateCacheValid && g_fCachedZBias == f)
-    return;
-  g_fCachedZBias = f;
-
   float fNear = SCALE(f, 0.0f, 1.0f, 0.05f, 0.0f);
   float fFar = SCALE(f, 0.0f, 1.0f, 1.0f, 0.95f);
 
@@ -2002,10 +2087,6 @@ void RageDisplay_Legacy::SetZBias(float f) {
 }
 
 void RageDisplay_Legacy::SetZTestMode(ZTestMode mode) {
-  if (g_bStateCacheValid && g_CachedZTestMode == mode)
-    return;
-  g_CachedZTestMode = mode;
-
   glEnable(GL_DEPTH_TEST);
   switch (mode) {
     case ZTEST_OFF:
@@ -2021,6 +2102,12 @@ void RageDisplay_Legacy::SetZTestMode(ZTestMode mode) {
       FAIL_M(ssprintf("Invalid ZTestMode: %i", mode));
   }
 }
+
+void RageDisplay_Legacy::SetTextureWrapping(TextureUnit tu, bool b) {
+  /* This should be per-texture-unit state, but it's per-texture state in
+   * OpenGl, so we'll behave incorrectly if the same texture is used in more
+   * than one texture unit simultaneously with different wrapping. */
+  SetTextureUnit(tu);
 
   GLenum mode = b ? GL_REPEAT : GL_CLAMP_TO_EDGE;
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mode);
@@ -2084,10 +2171,6 @@ void RageDisplay_Legacy::SetLightDirectional(
 }
 
 void RageDisplay_Legacy::SetCullMode(CullMode mode) {
-  if (g_bStateCacheValid && g_CachedCullMode == mode)
-    return;
-  g_CachedCullMode = mode;
-
   if (mode != CULL_NONE) {
     glEnable(GL_CULL_FACE);
   }
@@ -2145,7 +2228,7 @@ void RageDisplay_Legacy::DeleteTexture(uintptr_t iTexture) {
   }
 
   DebugFlushGLErrors();
-  glDeleteTextures(1, reinterpret_cast<GLuint*>(&iTexture));
+  GL_TRACK_DELETE_TEXTURES(1, reinterpret_cast<GLuint*>(&iTexture));
   DebugAssertNoGLError();
 }
 
@@ -2264,7 +2347,7 @@ uintptr_t RageDisplay_Legacy::CreateTexture(
 
   // allocate OpenGL texture resource
   uintptr_t iTexHandle;
-  glGenTextures(1, reinterpret_cast<GLuint*>(&iTexHandle));
+  GL_TRACK_GEN_TEXTURES(1, reinterpret_cast<GLuint*>(&iTexHandle));
   ASSERT(iTexHandle != 0);
 
   glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(iTexHandle));
@@ -2361,7 +2444,7 @@ struct RageTextureLock_OGL : public RageTextureLock, public InvalidateObject {
 
   ~RageTextureLock_OGL() {
     ASSERT(m_iTexHandle == 0);  // locked!
-    glDeleteBuffersARB(1, &m_iBuffer);
+    GL_TRACK_DELETE_BUFFERS_ARB(1, &m_iBuffer);
   }
 
   /* This is called when our OpenGL context is invalidated. */
@@ -2408,7 +2491,7 @@ struct RageTextureLock_OGL : public RageTextureLock, public InvalidateObject {
     }
 
     DebugFlushGLErrors();
-    glGenBuffersARB(1, &m_iBuffer);
+    GL_TRACK_GEN_BUFFERS_ARB(1, &m_iBuffer);
     DebugAssertNoGLError();
   }
 
@@ -2491,15 +2574,15 @@ RenderTarget_FramebufferObject::RenderTarget_FramebufferObject() {
 
 RenderTarget_FramebufferObject::~RenderTarget_FramebufferObject() {
   if (m_iDepthBufferHandle) {
-    glDeleteRenderbuffersEXT(
+    GL_TRACK_DELETE_RENDERBUFFERS_EXT(
         1, reinterpret_cast<GLuint*>(&m_iDepthBufferHandle));
   }
   if (m_iFrameBufferHandle) {
-    glDeleteFramebuffersEXT(
+    GL_TRACK_DELETE_FBOS_EXT(
         1, reinterpret_cast<GLuint*>(&m_iFrameBufferHandle));
   }
   if (m_iTexHandle) {
-    glDeleteTextures(1, reinterpret_cast<GLuint*>(&m_iTexHandle));
+    GL_TRACK_DELETE_TEXTURES(1, reinterpret_cast<GLuint*>(&m_iTexHandle));
   }
 }
 
@@ -2511,7 +2594,7 @@ void RenderTarget_FramebufferObject::Create(
   DebugFlushGLErrors();
 
   // Allocate OpenGL texture resource
-  glGenTextures(1, reinterpret_cast<GLuint*>(&m_iTexHandle));
+  GL_TRACK_GEN_TEXTURES(1, reinterpret_cast<GLuint*>(&m_iTexHandle));
   ASSERT(m_iTexHandle != 0);
 
   int iTextureWidth = power_of_two(param.iWidth);
@@ -2540,7 +2623,7 @@ void RenderTarget_FramebufferObject::Create(
   glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   /* Create the framebuffer object. */
-  glGenFramebuffersEXT(1, reinterpret_cast<GLuint*>(&m_iFrameBufferHandle));
+  GL_TRACK_GEN_FBOS_EXT(1, reinterpret_cast<GLuint*>(&m_iFrameBufferHandle));
   ASSERT(m_iFrameBufferHandle != 0);
 
   /* Attach the texture to it. */
@@ -2553,7 +2636,7 @@ void RenderTarget_FramebufferObject::Create(
 
   /* Attach a depth buffer, if requested. */
   if (param.bWithDepthBuffer) {
-    glGenRenderbuffersEXT(1, reinterpret_cast<GLuint*>(&m_iDepthBufferHandle));
+    GL_TRACK_GEN_RENDERBUFFERS_EXT(1, reinterpret_cast<GLuint*>(&m_iDepthBufferHandle));
     ASSERT(m_iDepthBufferHandle != 0);
 
     glBindRenderbufferEXT(

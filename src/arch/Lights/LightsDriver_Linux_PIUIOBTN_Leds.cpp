@@ -26,6 +26,8 @@ const int player1_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     -1,  // GAME_BUTTON_CUSTOM_01
     -1,  // GAME_BUTTON_CUSTOM_02
     -1,  // GAME_BUTTON_CUSTOM_03
@@ -60,6 +62,8 @@ const int player2_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     -1,  // GAME_BUTTON_CUSTOM_01
     -1,  // GAME_BUTTON_CUSTOM_02
     -1,  // GAME_BUTTON_CUSTOM_03

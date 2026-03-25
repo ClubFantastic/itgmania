@@ -570,6 +570,7 @@ bool Song::ReloadFromSongDir(std::string sDir) {
       RageTexture* tex = TEXTUREMAN->LoadTexture(id);
       if (tex) {
         tex->Reload();
+        TEXTUREMAN->UnloadTexture(tex);
       }
     }
   }

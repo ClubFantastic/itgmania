@@ -1,5 +1,6 @@
 #include "global.h"
 #include "LowLevelWindow_SDL.h"
+#include <algorithm>
 #include "RageLog.h"
 #include "RageException.h"
 #include "DisplaySpec.h"
@@ -413,7 +414,7 @@ bool LowLevelWindow_SDL::IsSoftwareRenderer(std::string &sError)
 	if (renderer)
 	{
 		std::string sRenderer(renderer);
-		sRenderer.MakeLower();
+		std::transform(sRenderer.begin(), sRenderer.end(), sRenderer.begin(), ::tolower);
 		if (sRenderer.find("software") != std::string::npos ||
 			sRenderer.find("llvmpipe") != std::string::npos ||
 			sRenderer.find("swrast") != std::string::npos)

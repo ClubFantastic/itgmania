@@ -66,6 +66,7 @@ RageDisplay* DISPLAY =
 
 Preference<bool> LOG_FPS("LogFPS", false);
 Preference<float> g_fFrameLimitPercent("FrameLimitPercent", 0.0f);
+Preference<int> g_iMaxFPS("MaxFPS", 480);  // Hard FPS cap; prevents driver memory growth on Wayland
 
 static const char* RagePixelFormatNames[] = {
     "RGBA8", "BGRA8", "RGBA4", "RGB5A1", "RGB5",
@@ -837,6 +838,19 @@ void RageDisplay::DrawCircle(const RageSpriteVertex& v, float radius) {
 
 void RageDisplay::FrameLimitBeforeVsync(int iFPS) {
   ASSERT(iFPS != 0);
+
+  // Hard FPS cap (MaxFPS preference). Applied independently of FrameLimitPercent.
+  // When vsync is off, this prevents unbounded frame rates that cause
+  // driver-side memory accumulation (especially on Wayland + NVIDIA).
+  int iMaxFPS = g_iMaxFPS.Get();
+  if (iMaxFPS > 0 && !g_LastFrameEndedAt.IsZero()) {
+    float fFrameTime = g_LastFrameEndedAt.GetDeltaTime();
+    float fMinFrameTime = 1.0f / iMaxFPS;
+    float fSleepTime = fMinFrameTime - fFrameTime;
+    if (fSleepTime > 0.0f) {
+      usleep(int(fSleepTime * 1000000));
+    }
+  }
 
   int iDelayMicroseconds = 0;
   if (g_fFrameLimitPercent.Get() > 0.0f && !g_LastFrameEndedAt.IsZero()) {

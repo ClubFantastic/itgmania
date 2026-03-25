@@ -40,6 +40,8 @@ const int player1_dance_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     20,  // GAME_BUTTON_CUSTOM_01
     21,  // GAME_BUTTON_CUSTOM_02
     18,  // GAME_BUTTON_CUSTOM_03
@@ -74,6 +76,8 @@ const int player2_dance_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     4,   // GAME_BUTTON_CUSTOM_01
     5,   // GAME_BUTTON_CUSTOM_02
     2,   // GAME_BUTTON_CUSTOM_03
@@ -108,6 +112,8 @@ const int player1_pump_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     2,   // GAME_BUTTON_CUSTOM_01
     3,   // GAME_BUTTON_CUSTOM_02
     4,   // GAME_BUTTON_CUSTOM_03
@@ -142,6 +148,8 @@ const int player2_pump_lights[] = {
     -1,  // GAME_BUTTON_OPERATOR
     -1,  // GAME_BUTTON_EFFECT_UP
     -1,  // GAME_BUTTON_EFFECT_DOWN
+    -1,  // GAME_BUTTON_SPEED_UP
+    -1,  // GAME_BUTTON_SPEED_DOWN
     18,  // GAME_BUTTON_CUSTOM_01
     19,  // GAME_BUTTON_CUSTOM_02
     20,  // GAME_BUTTON_CUSTOM_03
