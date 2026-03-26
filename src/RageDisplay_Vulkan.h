@@ -151,6 +151,12 @@ private:
 	VkSampler m_samplers[4] = {};  // [wrap*2 + filter]
 	VkSampler GetSampler(bool wrap, bool linear) const;
 
+	// Symmetric quad strip IBO (for hold note bodies)
+	VkBuffer m_symQuadIBO = VK_NULL_HANDLE;
+	VmaAllocation m_symQuadIBOAlloc = VK_NULL_HANDLE;
+	int m_iSymQuadIBOSize = 0;
+	void EnsureSymQuadIBO(int iNumPieces);
+
 	// Constant white color buffer for models (no per-vertex color)
 	VkBuffer m_whiteColorBuf = VK_NULL_HANDLE;
 	VmaAllocation m_whiteColorAlloc = VK_NULL_HANDLE;

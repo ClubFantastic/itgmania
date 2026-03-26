@@ -136,6 +136,9 @@ RageDisplay_Vulkan::~RageDisplay_Vulkan()
 	if (m_dummyTexture.imageView) vkDestroyImageView(m_ctx.device, m_dummyTexture.imageView, nullptr);
 	if (m_dummyTexture.image) vmaDestroyImage(m_ctx.allocator, m_dummyTexture.image, m_dummyTexture.allocation);
 
+	// Destroy symmetric quad strip IBO
+	if (m_symQuadIBO) vmaDestroyBuffer(m_ctx.allocator, m_symQuadIBO, m_symQuadIBOAlloc);
+
 	// Destroy white color buffer
 	if (m_whiteColorBuf) vmaDestroyBuffer(m_ctx.allocator, m_whiteColorBuf, m_whiteColorAlloc);
 
@@ -1696,12 +1699,71 @@ void RageDisplay_Vulkan::DrawLineStripInternal(const RageSpriteVertex v[], int i
 	vkCmdDraw(frame.commandBuffer, iNumVerts, 1, 0, 0);
 }
 
+void RageDisplay_Vulkan::EnsureSymQuadIBO(int iNumPieces)
+{
+	if (iNumPieces <= m_iSymQuadIBOSize)
+		return;
+
+	int newSize = std::max(iNumPieces, std::max(m_iSymQuadIBOSize * 2, 64));
+
+	std::vector<uint16_t> indices(newSize * 12);
+	for (uint16_t i = 0; i < (uint16_t)newSize; i++)
+	{
+		indices[i*12+0]  = i*3+1;
+		indices[i*12+1]  = i*3+3;
+		indices[i*12+2]  = i*3+0;
+		indices[i*12+3]  = i*3+1;
+		indices[i*12+4]  = i*3+4;
+		indices[i*12+5]  = i*3+3;
+		indices[i*12+6]  = i*3+1;
+		indices[i*12+7]  = i*3+5;
+		indices[i*12+8]  = i*3+4;
+		indices[i*12+9]  = i*3+1;
+		indices[i*12+10] = i*3+2;
+		indices[i*12+11] = i*3+5;
+	}
+
+	if (m_symQuadIBO)
+		vmaDestroyBuffer(m_ctx.allocator, m_symQuadIBO, m_symQuadIBOAlloc);
+
+	VkBufferCreateInfo bufCI = {};
+	bufCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufCI.size = indices.size() * sizeof(uint16_t);
+	bufCI.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+	VmaAllocationCreateInfo allocCI = {};
+	allocCI.usage = VMA_MEMORY_USAGE_AUTO;
+	allocCI.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+	vmaCreateBuffer(m_ctx.allocator, &bufCI, &allocCI, &m_symQuadIBO, &m_symQuadIBOAlloc, nullptr);
+
+	void *mapped;
+	vmaMapMemory(m_ctx.allocator, m_symQuadIBOAlloc, &mapped);
+	memcpy(mapped, indices.data(), bufCI.size);
+	vmaUnmapMemory(m_ctx.allocator, m_symQuadIBOAlloc);
+
+	m_iSymQuadIBOSize = newSize;
+}
+
 void RageDisplay_Vulkan::DrawSymmetricQuadStripInternal(const RageSpriteVertex v[], int iNumVerts)
 {
-	if (iNumVerts < 3) return;
+	if (iNumVerts < 6) return;
 
-	// Same as quad strip for now
-	DrawQuadStripInternal(v, iNumVerts);
+	int iNumPieces = (iNumVerts - 3) / 3;
+	int iNumTriangles = iNumPieces * 4;
+	int iNumIndices = iNumTriangles * 3;
+
+	EnsureSymQuadIBO(iNumPieces);
+
+	BindPipelineForCurrentState();
+	FlushPushConstants();
+	BindCurrentTexture();
+	UploadVertices(v, iNumVerts);
+
+	auto &frame = m_ctx.frames[m_ctx.currentFrame];
+	vkCmdSetPrimitiveTopology(frame.commandBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	vkCmdBindIndexBuffer(frame.commandBuffer, m_symQuadIBO, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdDrawIndexed(frame.commandBuffer, iNumIndices, 1, 0, 0, 0);
 }
 
 void RageDisplay_Vulkan::DrawCompiledGeometryInternal(const RageCompiledGeometry *p, int iMeshIndex)
@@ -1713,8 +1775,12 @@ void RageDisplay_Vulkan::DrawCompiledGeometryInternal(const RageCompiledGeometry
 	FlushPushConstants();
 	BindCurrentTexture();
 
-	// Bind the constant white color buffer to binding 3 (models have no per-vertex color)
 	auto &frame = m_ctx.frames[m_ctx.currentFrame];
+
+	// Models are always triangle lists
+	vkCmdSetPrimitiveTopology(frame.commandBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+	// Bind the constant white color buffer to binding 3 (models have no per-vertex color)
 	VkDeviceSize zero = 0;
 	vkCmdBindVertexBuffers(frame.commandBuffer, 3, 1, &m_whiteColorBuf, &zero);
 
