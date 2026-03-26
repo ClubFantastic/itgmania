@@ -45,7 +45,13 @@ public:
 	SDL_Window* GetWindow() const { return m_pWindow; }
 	SDL_GLContext GetGLContext() const { return m_GLContext; }
 
+	// Window API selection (must be set before TryVideoMode creates the window)
+	enum class WindowAPI { GL, Vulkan };
+	static void SetWindowAPI(WindowAPI api) { s_eWindowAPI = api; }
+	static WindowAPI GetWindowAPI() { return s_eWindowAPI; }
+
 private:
+	static WindowAPI s_eWindowAPI;
 	SDL_Window *m_pWindow;
 	SDL_GLContext m_GLContext;
 	SDL_GLContext m_GLBackgroundContext;

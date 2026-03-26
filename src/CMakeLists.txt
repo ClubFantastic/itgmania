@@ -474,6 +474,46 @@ if(HAS_GL3)
   target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_GL3 SUPPORT_GL3)
 endif()
 
+if(HAS_VULKAN)
+  target_compile_definitions("${SM_EXE_NAME}" PRIVATE HAS_VULKAN SUPPORT_VULKAN)
+  target_link_libraries("${SM_EXE_NAME}" Vulkan::Vulkan)
+  target_include_directories("${SM_EXE_NAME}" PRIVATE "${SM_EXTERN_DIR}/vma")
+
+  # Compile GLSL shaders to SPIR-V and embed as C headers
+  set(VULKAN_SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan")
+  set(VULKAN_SHADER_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/shaders")
+  file(MAKE_DIRECTORY "${VULKAN_SHADER_OUT_DIR}")
+
+  set(VULKAN_SHADER_SOURCES
+    sprite.vert sprite.frag
+    lit_sprite.vert lit_sprite.frag
+    effect_unpremultiply.frag effect_colorburn.frag effect_colordodge.frag
+    effect_vividlight.frag effect_hardmix.frag effect_overlay.frag
+    effect_screen.frag effect_yuyv422.frag effect_distancefield.frag)
+
+  set(VULKAN_SPV_FILES)
+  foreach(SHADER ${VULKAN_SHADER_SOURCES})
+    string(REPLACE "." "_" SHADER_VAR "${SHADER}")
+    set(SPV_FILE "${VULKAN_SHADER_OUT_DIR}/${SHADER}.spv")
+    set(HEADER_FILE "${VULKAN_SHADER_OUT_DIR}/${SHADER_VAR}.h")
+    add_custom_command(
+      OUTPUT "${SPV_FILE}"
+      COMMAND Vulkan::glslc "${VULKAN_SHADER_DIR}/${SHADER}" -o "${SPV_FILE}"
+      DEPENDS "${VULKAN_SHADER_DIR}/${SHADER}"
+      COMMENT "Compiling Vulkan shader ${SHADER}")
+    add_custom_command(
+      OUTPUT "${HEADER_FILE}"
+      COMMAND ${CMAKE_COMMAND} -DSPV_FILE="${SPV_FILE}" -DHEADER_FILE="${HEADER_FILE}" -DVAR_NAME="${SHADER_VAR}" -P "${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/embed_spirv.cmake"
+      DEPENDS "${SPV_FILE}"
+      COMMENT "Embedding SPIR-V ${SHADER}")
+    list(APPEND VULKAN_SPV_FILES "${HEADER_FILE}")
+  endforeach()
+
+  add_custom_target(vulkan_shaders DEPENDS ${VULKAN_SPV_FILES})
+  add_dependencies("${SM_EXE_NAME}" vulkan_shaders)
+  target_include_directories("${SM_EXE_NAME}" PRIVATE "${VULKAN_SHADER_OUT_DIR}")
+endif()
+
 if(WITH_TRACY)
   target_compile_definitions("${SM_EXE_NAME}" PRIVATE TRACY_ENABLE)
   target_include_directories("${SM_EXE_NAME}" PRIVATE /usr/include/Tracy)

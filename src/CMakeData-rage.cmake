@@ -131,6 +131,15 @@ if(WITH_GL3)
     "RageDisplay_GL3_Shaders.h")
 endif()
 
+if(WITH_VULKAN)
+  list(APPEND SMDATA_RAGE_GRAPHICS_SRC
+    "RageDisplay_Vulkan.cpp"
+    "RageDisplay_Vulkan_Helpers.cpp")
+  list(APPEND SMDATA_RAGE_GRAPHICS_HPP
+    "RageDisplay_Vulkan.h"
+    "RageDisplay_Vulkan_Helpers.h")
+endif()
+
 source_group("Rage\\\\Graphics"
              FILES
              ${SMDATA_RAGE_GRAPHICS_SRC}

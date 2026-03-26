@@ -13,7 +13,8 @@
 #include <GL/glew.h>
 #include <SDL3/SDL.h>
 
-// Static members for input event queue
+// Static members
+LowLevelWindow_SDL::WindowAPI LowLevelWindow_SDL::s_eWindowAPI = LowLevelWindow_SDL::WindowAPI::GL;
 std::mutex LowLevelWindow_SDL::s_EventQueueMutex;
 std::vector<SDL_Event> LowLevelWindow_SDL::s_InputEventQueue;
 
@@ -92,19 +93,27 @@ std::string LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNe
 	{
 		bNewDeviceOut = true;
 
-		// Set GL attributes before window creation
-		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-		// Enable context sharing for threaded rendering
-		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+		bool bVulkanMode = (s_eWindowAPI == WindowAPI::Vulkan);
+
+		// Set GL attributes before window creation (only for GL mode)
+		if (!bVulkanMode)
+		{
+			SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
+			SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+			SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+			// Enable context sharing for threaded rendering
+			SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+		}
 
 		SDL_PropertiesID props = SDL_CreateProperties();
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, p.sWindowTitle.c_str());
-		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
+		if (bVulkanMode)
+			SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+		else
+			SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, true);
 		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false);
 		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
 
@@ -151,48 +160,51 @@ std::string LowLevelWindow_SDL::TryVideoMode(const VideoModeParams &p, bool &bNe
 		if (!m_pWindow)
 			return ssprintf("SDL_CreateWindow failed: %s", SDL_GetError());
 
-		m_GLContext = SDL_GL_CreateContext(m_pWindow);
-		if (!m_GLContext)
+		if (!bVulkanMode)
 		{
-			SDL_DestroyWindow(m_pWindow);
-			m_pWindow = nullptr;
-			return ssprintf("SDL_GL_CreateContext failed: %s", SDL_GetError());
-		}
-
-		// Create shared background context for threaded rendering
-		m_GLBackgroundContext = SDL_GL_CreateContext(m_pWindow);
-		if (m_GLBackgroundContext)
-		{
-			// Switch back to the main context
-			SDL_GL_MakeCurrent(m_pWindow, m_GLContext);
-		}
-
-		// Ensure context is current before GLEW init
-		if (!SDL_GL_MakeCurrent(m_pWindow, m_GLContext))
-			LOG->Warn("SDL_GL_MakeCurrent before glewInit: %s", SDL_GetError());
-
-		// Initialize GLEW. glewExperimental is needed because glewInit()
-		// calls glGetString(GL_EXTENSIONS) which returns NULL on core
-		// profile contexts (GL 3.2+), causing a spurious error.
-		glewExperimental = GL_TRUE;
-		GLenum err = glewInit();
-		if (GLEW_OK != err)
-		{
-			// GLEW may fail on EGL/Wayland contexts (error 4 =
-			// GLEW_ERROR_GLX_VERSION_11_ONLY) because it probes GLX
-			// which doesn't exist. If GL functions work, continue.
-			if (glGetString(GL_VERSION) != nullptr)
+			m_GLContext = SDL_GL_CreateContext(m_pWindow);
+			if (!m_GLContext)
 			{
-				LOG->Info("glewInit returned error %d (%s) but GL context is functional; continuing",
-					(int)err, glewGetErrorString(err));
+				SDL_DestroyWindow(m_pWindow);
+				m_pWindow = nullptr;
+				return ssprintf("SDL_GL_CreateContext failed: %s", SDL_GetError());
 			}
-			else
+
+			// Create shared background context for threaded rendering
+			m_GLBackgroundContext = SDL_GL_CreateContext(m_pWindow);
+			if (m_GLBackgroundContext)
 			{
-				return ssprintf("glewInit failed: %s", glewGetErrorString(err));
+				// Switch back to the main context
+				SDL_GL_MakeCurrent(m_pWindow, m_GLContext);
 			}
+
+			// Ensure context is current before GLEW init
+			if (!SDL_GL_MakeCurrent(m_pWindow, m_GLContext))
+				LOG->Warn("SDL_GL_MakeCurrent before glewInit: %s", SDL_GetError());
+
+			// Initialize GLEW. glewExperimental is needed because glewInit()
+			// calls glGetString(GL_EXTENSIONS) which returns NULL on core
+			// profile contexts (GL 3.2+), causing a spurious error.
+			glewExperimental = GL_TRUE;
+			GLenum err = glewInit();
+			if (GLEW_OK != err)
+			{
+				// GLEW may fail on EGL/Wayland contexts (error 4 =
+				// GLEW_ERROR_GLX_VERSION_11_ONLY) because it probes GLX
+				// which doesn't exist. If GL functions work, continue.
+				if (glGetString(GL_VERSION) != nullptr)
+				{
+					LOG->Info("glewInit returned error %d (%s) but GL context is functional; continuing",
+						(int)err, glewGetErrorString(err));
+				}
+				else
+				{
+					return ssprintf("glewInit failed: %s", glewGetErrorString(err));
+				}
+			}
+			// glewInit may set GL_INVALID_ENUM with glewExperimental; clear it.
+			glGetError();
 		}
-		// glewInit may set GL_INVALID_ENUM with glewExperimental; clear it.
-		glGetError();
 	}
 	else
 	{
@@ -347,6 +359,8 @@ void LowLevelWindow_SDL::GetDisplaySpecs(DisplaySpecs &out) const
 
 void LowLevelWindow_SDL::SwapBuffers()
 {
+	if (s_eWindowAPI == WindowAPI::Vulkan)
+		return; // Vulkan handles presentation via vkQueuePresentKHR
 	SDL_GL_SwapWindow(m_pWindow);
 }
 

@@ -70,6 +70,8 @@ option(WITH_SDL3 "Build with SDL3 for windowing and input." OFF)
 
 option(WITH_GL3 "Build with OpenGL 3.3 core profile renderer." OFF)
 
+option(WITH_VULKAN "Build with Vulkan renderer." OFF)
+
 option(WITH_TRACY "Build with Tracy profiler instrumentation." OFF)
 
 option(WITH_MINIMAID "Build with Minimaid support." ON)

@@ -371,6 +371,10 @@ std::string StepMania::GetSelectMusicScreen() {
 #include "RageDisplay_GL3.h"
 #endif
 
+#if defined(SUPPORT_VULKAN)
+#include "RageDisplay_Vulkan.h"
+#endif
+
 #if defined(SUPPORT_GLES2)
 #include "RageDisplay_GLES2.h"
 #endif
@@ -567,6 +571,10 @@ RageDisplay* CreateDisplay() {
     if (CompareNoCase(sRenderer, "gl3") == 0) {
 #if defined(SUPPORT_GL3)
       pRet = new RageDisplay_GL3;
+#endif
+    } else if (CompareNoCase(sRenderer, "vulkan") == 0) {
+#if defined(SUPPORT_VULKAN)
+      pRet = new RageDisplay_Vulkan;
 #endif
     } else if (CompareNoCase(sRenderer, "opengl") == 0) {
 #if defined(SUPPORT_OPENGL)

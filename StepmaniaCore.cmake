@@ -164,6 +164,12 @@ endif()
 
 set(HAS_GL3 ${WITH_GL3})
 
+set(HAS_VULKAN FALSE)
+if(WITH_VULKAN)
+  find_package(Vulkan REQUIRED)
+  set(HAS_VULKAN TRUE)
+endif()
+
 find_package(nasm)
 find_package(yasm)
 find_package(Iconv)
