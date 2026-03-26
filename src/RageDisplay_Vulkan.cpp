@@ -602,7 +602,29 @@ bool RageDisplay_Vulkan::CreateSwapchain()
 	ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	ci.preTransform = caps.currentTransform;
 	ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	ci.presentMode = VK_PRESENT_MODE_FIFO_KHR; // vsync
+	// Select present mode based on vsync preference
+	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR; // vsync on (default)
+	if (!g_pWind->GetActualVideoModeParams().vsync)
+	{
+		// Prefer MAILBOX (low-latency, no tearing) over IMMEDIATE (tearing OK)
+		uint32_t presentModeCount;
+		vkGetPhysicalDeviceSurfacePresentModesKHR(m_ctx.physicalDevice, m_ctx.surface, &presentModeCount, nullptr);
+		std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(m_ctx.physicalDevice, m_ctx.surface, &presentModeCount, presentModes.data());
+
+		presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // fallback: no vsync
+		for (auto mode : presentModes)
+		{
+			if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+			{
+				presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+				break;
+			}
+		}
+		LOG->Info("Vulkan: Vsync off, present mode: %s",
+			presentMode == VK_PRESENT_MODE_MAILBOX_KHR ? "mailbox" : "immediate");
+	}
+	ci.presentMode = presentMode;
 	ci.clipped = VK_TRUE;
 	ci.oldSwapchain = oldSwapchain;
 
