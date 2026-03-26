@@ -1780,9 +1780,32 @@ void RageDisplay_Vulkan::DrawCompiledGeometryInternal(const RageCompiledGeometry
 	// Models are always triangle lists
 	vkCmdSetPrimitiveTopology(frame.commandBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
-	// Bind the constant white color buffer to binding 3 (models have no per-vertex color)
-	VkDeviceSize zero = 0;
-	vkCmdBindVertexBuffers(frame.commandBuffer, 3, 1, &m_whiteColorBuf, &zero);
+	// Models don't have per-vertex colors. When lighting is off, the legacy
+	// renderer uses material color (diffuse+emissive+ambient) as a fallback.
+	// Write the computed color into the vertex ring buffer and bind it.
+	VkDeviceSize colorOffset = frame.vertexOffset;
+	{
+		RageColor c = m_MatDiffuse;
+		if (!m_bLightingEnabled)
+		{
+			c.r = std::min(c.r + m_MatEmissive.r + m_MatAmbient.r, 1.0f);
+			c.g = std::min(c.g + m_MatEmissive.g + m_MatAmbient.g, 1.0f);
+			c.b = std::min(c.b + m_MatEmissive.b + m_MatAmbient.b, 1.0f);
+		}
+		// Write as BGRA bytes matching VK_FORMAT_R8G8B8A8_UNORM + shader .zyxw swizzle
+		uint8_t color[4] = {
+			(uint8_t)(c.b * 255.0f),
+			(uint8_t)(c.g * 255.0f),
+			(uint8_t)(c.r * 255.0f),
+			(uint8_t)(c.a * 255.0f)
+		};
+		if (frame.vertexOffset + 4 <= frame.vertexCapacity)
+		{
+			memcpy((uint8_t *)frame.vertexMapped + frame.vertexOffset, color, 4);
+			frame.vertexOffset += 4;
+		}
+	}
+	vkCmdBindVertexBuffers(frame.commandBuffer, 3, 1, &frame.vertexBuffer, &colorOffset);
 
 	p->Draw(iMeshIndex);
 
