@@ -10,6 +10,7 @@
 #if defined(MEMORY_MONITOR)
 
 #include "RageLog.h"
+#include "RageSurface.h"
 #include "RageDisplay_OGL_Helpers.h"
 
 #include <cstdio>
@@ -58,6 +59,14 @@ public:
 		long dGPU = gpuAvailKB - prevGPU;
 		long dAnon = anonKB - prevAnon;
 
+#if defined(__linux__)
+		// Periodically ask glibc to return freed memory to the OS.
+		// Without this, malloc's arena fragments over time — freed blocks
+		// stay resident as anonymous pages, causing RSS to grow even though
+		// the application isn't actually leaking.
+		malloc_trim(0);
+#endif
+
 		LOG->Info("MemMon [frame %d]: RSS=%ldMB(%+ldKB) Lua=%ldKB(%+ldKB) "
 			"malloc_arena=%ldKB(%+ldKB) malloc_mmap=%ldKB(%+ldKB) "
 			"anon=%ldMB(%+ldKB) gpu_avail=%ldMB(%+ldKB)",
@@ -75,6 +84,15 @@ public:
 		prevMmap = mmapKB;
 		prevGPU = gpuAvailKB;
 		prevAnon = anonKB;
+
+		RageSurface_LogLeakStats();
+
+		// Every 30 seconds, dump memory region and malloc info
+		static int dumpCounter = 0;
+		if (++dumpCounter % 30 == 0) {
+			DumpAnonRegions();
+			DumpMallocInfo();
+		}
 	}
 
 	// Force-log regardless of frame counter
@@ -97,6 +115,72 @@ private:
 		return resident * 4;
 #else
 		return 0;
+#endif
+	}
+
+	static void DumpAnonRegions()
+	{
+#if defined(__linux__)
+		FILE *f = fopen("/proc/self/smaps_rollup", "r");
+		if (!f) return;
+		char line[256];
+		while (fgets(line, sizeof(line), f)) {
+			// Strip newline
+			char *nl = strchr(line, '\n');
+			if (nl) *nl = '\0';
+			// Log interesting lines
+			if (strstr(line, "Rss:") || strstr(line, "Anonymous:") ||
+				strstr(line, "Shared") || strstr(line, "Private"))
+				LOG->Info("MemMap: %s", line);
+		}
+		fclose(f);
+
+		// Also count nvidia driver maps
+		f = fopen("/proc/self/maps", "r");
+		if (!f) return;
+		int nvidiaCount = 0, totalAnon = 0;
+		while (fgets(line, sizeof(line), f)) {
+			if (strstr(line, "nvidia")) nvidiaCount++;
+			// Count anonymous rw regions (no pathname, rw-p)
+			if (strstr(line, "rw-p") && !strstr(line, "/") && !strstr(line, "["))
+				totalAnon++;
+		}
+		fclose(f);
+		LOG->Info("MemMap: nvidia_maps=%d anon_rw_regions=%d", nvidiaCount, totalAnon);
+#endif
+	}
+
+	static void DumpMallocInfo()
+	{
+#if defined(__linux__)
+		// malloc_info() gives per-arena details that mallinfo2() hides
+		FILE *f = fopen("/tmp/itg_malloc_info.xml", "w");
+		if (f) {
+			malloc_info(0, f);
+			fclose(f);
+		}
+		// Parse just the summary: total system bytes and in-use bytes
+		f = fopen("/tmp/itg_malloc_info.xml", "r");
+		if (!f) return;
+		long totalSystem = 0, totalInUse = 0;
+		int arenaCount = 0;
+		char line[512];
+		while (fgets(line, sizeof(line), f)) {
+			long val;
+			if (strstr(line, "<system type=\"current\"") && sscanf(strstr(line, "size=\""), "size=\"%ld\"", &val) == 1)
+				totalSystem += val;
+			if (strstr(line, "<total type=\"fast\"") && sscanf(strstr(line, "size=\""), "size=\"%ld\"", &val) == 1)
+				totalInUse += val;
+			if (strstr(line, "<total type=\"rest\"") && sscanf(strstr(line, "size=\""), "size=\"%ld\"", &val) == 1)
+				totalInUse += val;
+			if (strstr(line, "<total type=\"mmap\"") && sscanf(strstr(line, "size=\""), "size=\"%ld\"", &val) == 1)
+				totalInUse += val;
+			if (strstr(line, "<heap nr="))
+				arenaCount++;
+		}
+		fclose(f);
+		LOG->Info("MallocInfo: arenas=%d system=%ldMB inuse=%ldMB",
+			arenaCount, totalSystem / (1024*1024), totalInUse / (1024*1024));
 #endif
 	}
 

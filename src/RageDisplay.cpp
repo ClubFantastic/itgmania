@@ -837,7 +837,8 @@ void RageDisplay::DrawCircle(const RageSpriteVertex& v, float radius) {
 }
 
 void RageDisplay::FrameLimitBeforeVsync(int iFPS) {
-  ASSERT(iFPS != 0);
+  if (iFPS <= 0)
+    return;
 
   // Hard FPS cap (MaxFPS preference). Applied independently of FrameLimitPercent.
   // When vsync is off, this prevents unbounded frame rates that cause

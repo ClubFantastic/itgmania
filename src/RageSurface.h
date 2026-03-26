@@ -86,6 +86,9 @@ RageSurface* CreateSurfaceFrom(
     int width, int height, int bpp, uint32_t Rmask, uint32_t Gmask,
     uint32_t Bmask, uint32_t Amask, uint8_t* pPixels, uint32_t pitch);
 
+// Surface leak tracking
+void RageSurface_LogLeakStats();
+
 #endif
 
 /*

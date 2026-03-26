@@ -1,5 +1,6 @@
 #include "RageSurface.h"
 
+#include <atomic>
 #include <climits>
 #include <cmath>
 #include <cstddef>
@@ -7,8 +8,22 @@
 #include <cstring>
 #include <memory>
 
+#include "RageLog.h"
 #include "RageUtil.h"
 #include "global.h"
+
+// Surface leak tracking: counts live surfaces and bytes after initial loading
+static std::atomic<int> g_iSurfaceCount{0};
+static std::atomic<long long> g_llSurfaceBytes{0};
+static std::atomic<int> g_iTotalCreated{0};
+static std::atomic<int> g_iTotalDestroyed{0};
+
+void RageSurface_LogLeakStats() {
+  LOG->Info("SurfTrack: live=%d (%lldMB) created=%d destroyed=%d delta=%d",
+      g_iSurfaceCount.load(), g_llSurfaceBytes.load() / (1024*1024),
+      g_iTotalCreated.load(), g_iTotalDestroyed.load(),
+      g_iTotalCreated.load() - g_iTotalDestroyed.load());
+}
 
 int32_t RageSurfacePalette::FindColor(const RageSurfaceColor& color) const {
   for (int i = 0; i < ncolors; ++i) {
@@ -149,12 +164,21 @@ RageSurface::RageSurface(const RageSurface& cpy) {
   if (cpy.pixels) {
     pixels = new uint8_t[static_cast<size_t>(pitch) * h];
     memcpy(pixels, cpy.pixels, static_cast<size_t>(pitch) * h);
+    g_llSurfaceBytes.fetch_add((long long)pitch * h);
   } else {
     pixels = nullptr;
   }
+  g_iSurfaceCount.fetch_add(1);
+  g_iTotalCreated.fetch_add(1);
 }
 
 RageSurface::~RageSurface() {
+  g_iSurfaceCount.fetch_sub(1);
+  if (pixels_owned && pixels) {
+    long long bytes = (long long)pitch * h;
+    g_llSurfaceBytes.fetch_sub(bytes);
+  }
+  g_iTotalDestroyed.fetch_add(1);
   if (pixels_owned) {
     delete[] pixels;
   }
@@ -233,13 +257,11 @@ RageSurface* CreateSurface(
   pImg->flags = 0;
   pImg->pitch = width * BitsPerPixel / 8;
   pImg->pixels = new uint8_t[pImg->pitch * height];
+  pImg->pixels_owned = true;
 
-  /*
-  if( BitsPerPixel == 8 )
-  {
-          pImg->fmt.palette = new RageSurfacePalette;
-  }
-  */
+  g_iSurfaceCount.fetch_add(1);
+  g_llSurfaceBytes.fetch_add((long long)pImg->pitch * height);
+  g_iTotalCreated.fetch_add(1);
 
   return pImg;
 }
@@ -258,6 +280,10 @@ RageSurface* CreateSurfaceFrom(
   pImg->pitch = pitch;
   pImg->pixels = pPixels;
   pImg->pixels_owned = false;
+
+  g_iSurfaceCount.fetch_add(1);
+  // Don't count bytes — pixels are not owned
+  g_iTotalCreated.fetch_add(1);
 
   return pImg;
 }
