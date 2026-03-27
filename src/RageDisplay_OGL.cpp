@@ -639,7 +639,7 @@ void RageDisplay_Legacy::UploadSpriteVertices(
     glNormalPointer(GL_FLOAT, sizeof(RageSpriteVertex),
         &v[0].n);
     glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(RageSpriteVertex),
+    glColorPointer(GL_BGRA, GL_UNSIGNED_BYTE, sizeof(RageSpriteVertex),
         &v[0].c);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glTexCoordPointer(2, GL_FLOAT, sizeof(RageSpriteVertex),
@@ -680,7 +680,7 @@ void RageDisplay_Legacy::UploadSpriteVertices(
   glNormalPointer(GL_FLOAT, stride,
       reinterpret_cast<void*>(offsetof(RageSpriteVertex, n)));
   glEnableClientState(GL_COLOR_ARRAY);
-  glColorPointer(4, GL_UNSIGNED_BYTE, stride,
+  glColorPointer(GL_BGRA, GL_UNSIGNED_BYTE, stride,
       reinterpret_cast<void*>(offsetof(RageSpriteVertex, c)));
   glEnableClientState(GL_TEXTURE_COORD_ARRAY);
   glTexCoordPointer(2, GL_FLOAT, stride,

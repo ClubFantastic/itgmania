@@ -159,8 +159,6 @@ RageTexture* RageTextureManager::LoadTextureInternal(RageTextureID ID) {
     /* Found the texture.  Just increase the refcount and return it. */
     RageTexture* pTexture = p->second;
     pTexture->m_iRefCount++;
-    LOG->Trace("TexRef: LoadExisting refcount=%d '%s'",
-        pTexture->m_iRefCount, ID.filename.c_str());
     return pTexture;
   }
 
@@ -178,8 +176,6 @@ RageTexture* RageTextureManager::LoadTextureInternal(RageTextureID ID) {
   m_mapPathToTexture[ID] = pTexture;
   m_texture_ids_by_pointer[pTexture] = ID;
 
-  LOG->Trace("TexRef: LoadNew refcount=%d '%s'",
-      pTexture->m_iRefCount, ID.filename.c_str());
   return pTexture;
 }
 
@@ -194,8 +190,6 @@ RageTexture* RageTextureManager::LoadTexture(RageTextureID ID) {
 
 RageTexture* RageTextureManager::CopyTexture(RageTexture* pCopy) {
   ++pCopy->m_iRefCount;
-  LOG->Trace("TexRef: Copy refcount=%d '%s'",
-      pCopy->m_iRefCount, pCopy->GetID().filename.c_str());
   return pCopy;
 }
 
@@ -212,8 +206,6 @@ void RageTextureManager::UnloadTexture(RageTexture* t) {
   }
 
   t->m_iRefCount--;
-  LOG->Trace("TexRef: Unload refcount=%d '%s'",
-      t->m_iRefCount, t->GetID().filename.c_str());
   ASSERT_M(
       t->m_iRefCount >= 0,
       ssprintf("%i, %s", t->m_iRefCount, t->GetID().filename.c_str()));
@@ -274,19 +266,6 @@ void RageTextureManager::DeleteTexture(RageTexture* t) {
 void RageTextureManager::GarbageCollect(GCType type) {
   // Search for old textures with refcount==0 to unload
   LOG->Trace("Performing texture garbage collection.");
-
-  // Dump all textures with high refcounts to help find leaks
-  int totalTextures = 0;
-  int totalRefs = 0;
-  for (auto it = m_mapPathToTexture.begin(); it != m_mapPathToTexture.end(); ++it) {
-    totalTextures++;
-    totalRefs += it->second->m_iRefCount;
-    if (it->second->m_iRefCount > 1) {
-      LOG->Info("TexRef: GC high-ref refcount=%d '%s'",
-          it->second->m_iRefCount, it->first.filename.c_str());
-    }
-  }
-  LOG->Info("TexRef: GC summary: %d textures, %d total refs", totalTextures, totalRefs);
 
   for (std::map<RageTextureID, RageTexture*>::iterator i =
            m_mapPathToTexture.begin();
